@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智能营养膳食制作与推荐系统</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <!-- 顶部导航 -->
+  <nav class="nav">
+    <a class="nav-brand" href="{{ url_for('index') }}">🥗 智能营养膳食</a>
+    <div class="nav-links">
+      <a href="{{ url_for('index') }}" class="active">食谱推荐</a>
+      <a href="{{ url_for('market') }}">买菜推荐</a>
+    </div>
+  </nav>
+
+  <!-- 顶部品牌区 -->
+  <header class="hero">
+    <div class="hero-inner">
+      <span class="hero-badge">智能营养 · 个性化食谱</span>
+      <h1 class="hero-title">今晚吃什么，交给营养师</h1>
+      <p class="hero-sub">输入你的健康目标 + 手头食材，10 秒得到符合你目标的食谱与搭配建议</p>
+      <div class="hero-steps">
+        <div class="step"><span class="step-num">1</span><span>选健康目标</span></div>
+        <div class="step-arrow">→</div>
+        <div class="step"><span class="step-num">2</span><span>输入现有食材</span></div>
+        <div class="step-arrow">→</div>
+        <div class="step"><span class="step-num">3</span><span>生成个性化食谱</span></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- 拍照识别（独立步骤：识别 → 输出 → 回填文本框） -->
+    <section class="panel form-panel recognize-panel">
+      <h2 class="panel-title"><span class="panel-index">📷</span>拍照识别食材 <span class="opt-tag">可选</span></h2>
+      <p class="note">上传冰箱照片，点「识别图片」后，识别出的食材名会自动填入下方输入框，可手动修改再生成食谱。</p>
+      <form method="post" action="{{ url_for('recognize') }}" enctype="multipart/form-data" class="recognize-form" onsubmit="syncExisting()">
+        <input type="hidden" name="existing" id="existing-ingredients">
+        <input type="file" name="image" accept="image/*" class="file-input" id="recognize-image">
+        <button type="submit" class="btn-secondary">🔍 识别图片</button>
+      </form>
+      {% if recognize_done %}
+      <div class="recog-result">
+        {% if recognized %}
+        <p class="recog-text">✅ 识别到（{{ recognized_mode }}）：
+          {% for r in recognized %}<span class="recog-name">{{ r.name }}</span>{% endfor %}
+          —— 已填入下方输入框，可编辑后点「生成个性化食谱」。
+        </p>
+        {% else %}
+        <p class="recog-text">⚠️ 未能从图片中识别到已知食材，请在下方输入框手动输入食材名。</p>
+        {% endif %}
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- 输入表单 -->
+    <section class="panel form-panel">
+      <h2 class="panel-title"><span class="panel-index">01</span>开始推荐</h2>
+      <form method="post" action="{{ url_for('recommend') }}">
+
+        <div class="field">
+          <label class="field-label">选择健康目标</label>
+          <div class="goal-group">
+            {% for g in goals %}
+            <label class="goal-pill">
+              <input type="radio" name="goal" value="{{ g }}"
+                     {% if (submitted and goal == g) or (not submitted and g == '减脂') %}checked{% endif %}>
+              <span>{{ g }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="ingredients">
+            输入现有食材
+            <button type="button" class="link-btn" onclick="fillDemo()">🎯 一键填演示数据</button>
+          </label>
+          <textarea id="ingredients" name="ingredients" rows="2"
+                    placeholder="例如：鸡蛋 西红柿 鸡胸肉 西兰花">{{ ingredients_input or '' }}</textarea>
+        </div>
+
+        <div class="field">
+          <label class="field-label">选择禁忌 / 过敏原 / 基础疾病 <span class="opt-tag">可选</span></label>
+          <div class="taboo-group">
+            {% for label, cat in taboo_options.items() %}
+            <label class="taboo-chip">
+              <input type="checkbox" name="taboos" value="{{ label }}"
+                     {% if submitted and label in taboos %}checked{% endif %}>
+              <span>{{ label }}</span>
+              <em class="cat">{{ cat }}</em>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">健康档案（用于健康评估）<span class="opt-tag">可选</span></label>
+          <div class="field-row">
+            <label class="mini-field">
+              <span class="mini-label">年龄</span>
+              <input type="number" id="age" name="age" min="1" max="120" value="{{ age or '' }}" placeholder="岁">
+            </label>
+            <label class="mini-field">
+              <span class="mini-label">性别</span>
+              <select id="gender" name="gender" class="select">
+                <option value="">—</option>
+                <option value="男" {% if gender == '男' %}selected{% endif %}>男</option>
+                <option value="女" {% if gender == '女' %}selected{% endif %}>女</option>
+              </select>
+            </label>
+            <label class="mini-field">
+              <span class="mini-label">身高</span>
+              <input type="number" id="height" name="height" min="50" max="250" value="{{ height or '' }}" placeholder="cm">
+            </label>
+            <label class="mini-field">
+              <span class="mini-label">体重</span>
+              <input type="number" id="weight" name="weight" min="10" max="300" value="{{ weight or '' }}" placeholder="kg">
+            </label>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary">生成个性化食谱</button>
+      </form>
+    </section>
+
+    {% if submitted %}
+    <section class="results">
+      <!-- 健康画像 -->
+      <div class="panel">
+        <h2 class="panel-title"><span class="panel-index">02</span>你的健康画像</h2>
+        <div class="profile-row">
+          <div class="profile-goal">{{ profile.goal }}</div>
+          <div class="profile-desc">
+            <p>{{ profile.goal_desc }}</p>
+            <p class="profile-taboo">禁忌：
+              {% if profile.taboos %}{{ profile.taboos | join('、') }}{% else %}无{% endif %}
+            </p>
+          </div>
+        </div>
+
+        {% if health.has_profile %}
+        <div class="health-grid">
+          <div class="health-stat">
+            <span class="health-num">BMI {{ health.bmi }}</span>
+            <span class="health-label">{{ health.bmi_category }}</span>
+          </div>
+          <div class="health-stat">
+            <span class="health-num">BMR</span>
+            <span class="health-label">{{ health.bmr }} kcal/天</span>
+          </div>
+          <div class="health-stat">
+            <span class="health-num">理想体重</span>
+            <span class="health-label">{{ health.ideal_range }}</span>
+          </div>
+        </div>
+        {% if health.goal_hint %}
+        <p class="health-hint">💡 {{ health.goal_hint }}</p>
+        {% endif %}
+        {% if health_comment %}
+        <div class="health-comment">{{ health_comment }}</div>
+        {% endif %}
+        {% endif %}
+      </div>
+
+      <!-- 提示 / 警告 -->
+      {% if missing or filtered_ingredients or filtered_recipe_names %}
+      <div class="panel warn-panel">
+        <h2 class="panel-title"><span class="panel-index">!</span>提示</h2>
+        <ul class="warn-list">
+          {% if missing %}
+          <li>以下食材未在营养库中识别到，已忽略：<strong>{{ missing | join('、') }}</strong></li>
+          {% endif %}
+          {% for f in filtered_ingredients %}
+          <li>你输入的「{{ f.item.name }}」命中禁忌 <strong>{{ f.tags | join('、') }}</strong>，已自动过滤。</li>
+          {% endfor %}
+          {% if filtered_recipe_names %}
+          <li>以下菜谱含你的禁忌食材，已过滤：<strong>{{ filtered_recipe_names | join('、') }}</strong></li>
+          {% endif %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <!-- 营养分析 -->
+      {% if matched %}
+      <div class="panel">
+        <h2 class="panel-title"><span class="panel-index">03</span>食材营养分析 <span class="unit">每 100g</span></h2>
+        <div class="table-wrap">
+          <table class="nutrition-table">
+            <thead>
+              <tr>
+                <th>食材</th><th>类别</th><th>热量<br><span class="th-unit">kcal</span></th>
+                <th>蛋白质<br><span class="th-unit">g</span></th><th>脂肪<br><span class="th-unit">g</span></th>
+                <th>碳水<br><span class="th-unit">g</span></th><th>纤维<br><span class="th-unit">g</span></th><th>GI</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in matched %}
+              <tr>
+                <td class="cell-name">{{ d.name }}</td>
+                <td class="cell-cat">{{ d.category }}</td>
+                <td class="cell-kcal">{{ "%.0f"|format(d.calories) }}</td>
+                <td>{{ "%.1f"|format(d.protein) }}</td>
+                <td>{{ "%.1f"|format(d.fat) }}</td>
+                <td>{{ "%.1f"|format(d.carb) }}</td>
+                <td>{{ "%.1f"|format(d.fiber) }}</td>
+                <td>{{ d.gi if d.gi is not none else '—' }}</td>
+              </tr>
+              {% endfor %}
+              {% if totals %}
+              <tr class="total-row">
+                <td class="cell-name"><strong>合计估算</strong></td>
+                <td>—</td>
+                <td class="cell-kcal">{{ "%.0f"|format(totals.calories) }}</td>
+                <td>{{ "%.1f"|format(totals.protein) }}</td>
+                <td>{{ "%.1f"|format(totals.fat) }}</td>
+                <td>{{ "%.1f"|format(totals.carb) }}</td>
+                <td>{{ "%.1f"|format(totals.fiber) }}</td>
+                <td>—</td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        <p class="note">* 合计按每种食材 100g 估算，实际请按烹饪用量调整。</p>
+      </div>
+      {% endif %}
+
+      <!-- 推荐菜谱 -->
+      <div class="panel">
+        <h2 class="panel-title"><span class="panel-index">04</span>个性化推荐菜谱</h2>
+        {% if recommendations %}
+        <div class="recipe-list">
+          {% for r in recommendations %}
+          <div class="recipe">
+            <div class="recipe-head">
+              <h3 class="recipe-name">{{ r.recipe.name }}</h3>
+              <div class="recipe-meta">
+                <span class="badge badge-method">{{ r.recipe.method }}</span>
+                {% if r.recipe.region %}<span class="badge badge-region">{{ r.recipe.region }}</span>{% endif %}
+                {% if r.recipe.flavor %}<span class="badge badge-flavor">口味 {{ r.recipe.flavor }}</span>{% endif %}
+                <span class="badge badge-cal">约 {{ r.recipe.estimated_calories }} kcal</span>
+                {% for t in r.recipe.tags %}<span class="badge badge-tag">{{ t }}</span>{% endfor %}
+              </div>
+            </div>
+            <div class="match-bar-wrap">
+              <div class="match-label">
+                <span>食材匹配度</span>
+                <span class="match-pct">{{ (r.coverage * 100) | int }}%</span>
+              </div>
+              <div class="match-bar"><div class="match-fill" style="width: {{ (r.coverage * 100) | int }}%"></div></div>
+            </div>
+            <p class="recipe-coverage">
+              手头可用：<strong>{{ r.available | join('、') or '无' }}</strong>
+              {% if r.missing %}｜还缺：<span class="missing">{{ r.missing | join('、') }}</span>{% else %}｜<span class="ready">食材齐全</span>{% endif %}
+            </p>
+            <ol class="steps">
+              {% for s in r.recipe.steps %}<li>{{ s }}</li>{% endfor %}
+            </ol>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty">暂无匹配菜谱，请尝试输入更多常见食材。</p>
+        {% endif %}
+      </div>
+
+      <!-- 大模型点评 -->
+      {% if llm_text %}
+      <div class="panel llm-panel">
+        <h2 class="panel-title"><span class="panel-index">AI</span>AI 营养师点评</h2>
+        <div class="llm-text">{{ llm_text }}</div>
+      </div>
+      {% endif %}
+
+      <!-- 搭配建议 -->
+      <div class="panel">
+        <h2 class="panel-title"><span class="panel-index">05</span>搭配建议</h2>
+        <ul class="advice-list">
+          {% for a in advice %}<li><span class="advice-dot"></span>{{ a }}</li>{% endfor %}
+        </ul>
+      </div>
+
+      <p class="disclaimer">⚠️ 本系统建议仅供膳食参考，不构成医疗诊断或治疗建议。</p>
+    </section>
+    {% endif %}
+  </main>
+
+  <script>
+    function syncExisting() {
+      document.getElementById('existing-ingredients').value = document.getElementById('ingredients').value;
+    }
+    function fillDemo() {
+      document.getElementById('ingredients').value = '鸡蛋 西红柿 鸡胸肉 西兰花';
+      document.getElementById('age').value = '28';
+      document.getElementById('gender').value = '女';
+      document.getElementById('height').value = '162';
+      document.getElementById('weight').value = '60';
+      document.getElementById('ingredients').focus();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>按地区季节推荐买菜 · 智能营养膳食系统</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <!-- 顶部导航 -->
+  <nav class="nav">
+    <a class="nav-brand" href="{{ url_for('index') }}">🥗 智能营养膳食</a>
+    <div class="nav-links">
+      <a href="{{ url_for('index') }}">食谱推荐</a>
+      <a href="{{ url_for('market') }}" class="active">买菜推荐</a>
+    </div>
+  </nav>
+
+  <header class="hero hero-compact">
+    <div class="hero-inner">
+      <span class="hero-badge">应季 · 地域 · 新鲜</span>
+      <h1 class="hero-title">今天该买什么菜？</h1>
+      <p class="hero-sub">根据你所在的地区与当前季节，推荐应季新鲜、也适合做成健康膳食的食材</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel form-panel">
+      <h2 class="panel-title"><span class="panel-index">01</span>选择地区与季节</h2>
+      <form method="post" action="{{ url_for('market') }}">
+        <div class="field">
+          <label class="field-label" for="region">所在地区</label>
+          <select id="region" name="region" class="select">
+            {% for r in regions %}
+            <option value="{{ r }}" {% if selected and selected.region == r %}selected{% endif %}>{{ r }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="month">月份（自动对应季节）</label>
+          <select id="month" name="month" class="select">
+            {% for m in months %}
+            <option value="{{ m }}" {% if selected and selected.month == m %}selected{% endif %}>{{ m }} 月</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <button type="submit" class="btn-primary">推荐买菜清单</button>
+      </form>
+    </section>
+
+    {% if selected %}
+    <section class="results">
+      <div class="panel">
+        <h2 class="panel-title">
+          <span class="panel-index">02</span>「{{ selected.region }}」· {{ selected.season }} 买菜推荐
+        </h2>
+
+        <h3 class="market-h">🍃 应季时令食材</h3>
+        <ul class="market-list">
+          {% for d in selected.seasonal %}
+          <li>
+            <span class="market-name">{{ d.name }}</span>
+            <span class="market-reason">{{ d.reason }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+
+        <h3 class="market-h">📍 {{ selected.region }} 地方特色食材</h3>
+        <div class="market-tags">
+          {% for n in selected.regional %}
+          <span class="market-tag">{{ n }}</span>
+          {% endfor %}
+        </div>
+
+        <a class="btn-secondary" href="{{ url_for('index') }}?ingredients={{ ingredient_param }}">用这些食材生成食谱 →</a>
+      </div>
+      <p class="disclaimer">⚠️ 推荐仅按季节与地域常识整理，供买菜参考。</p>
+    </section>
+    {% endif %}
+  </main>
+</body>
+</html>

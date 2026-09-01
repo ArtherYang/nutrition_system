@@ -1,0 +1,27 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---- 本地机密（API Key 等，绝不入库）----
+_local_secrets.py
+.env
+
+# ---- 运行时生成物 ----
+database/nutrition.db
+app.log
+*.log
+
+# ---- 大模型权重（首次运行自动下载，体积大不入库）----
+yolov8n.pt
+*.pt
+*.onnx
+*.pth
+
+# ---- 系统 / 编辑器 ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
