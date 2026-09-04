@@ -3,16 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>按地区季节推荐买菜 · 智能营养膳食系统</title>
+  <title>按地区季节推荐买菜 · 知食分子</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta name="theme-color" content="#5f7f63">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 </head>
 <body>
   <!-- 顶部导航 -->
   <nav class="nav">
-    <a class="nav-brand" href="{{ url_for('index') }}">🥗 智能营养膳食</a>
+    <a class="nav-brand" href="{{ url_for('home') }}">🥗 知食分子</a>
     <div class="nav-links">
-      <a href="{{ url_for('index') }}">食谱推荐</a>
+      <a href="{{ url_for('profile') }}">健康档案</a>
       <a href="{{ url_for('market') }}" class="active">买菜推荐</a>
+      <a href="{{ url_for('index') }}">食谱推荐</a>
+      <a href="{{ url_for('daily') }}">一日饮食规划</a>
+      <a href="{{ url_for('week') }}">一周食谱</a>
+      <a href="{{ url_for('library') }}">知识库</a>
+      {% if current_user %}
+      <span class="nav-user">👤 {{ current_user }}</span>
+      <a href="{{ url_for('logout') }}">退出</a>
+      {% else %}
+      <a href="{{ url_for('login') }}">登录</a>
+      <a href="{{ url_for('register') }}">注册</a>
+      {% endif %}
     </div>
   </nav>
 
@@ -25,9 +39,14 @@
   </header>
 
   <main class="container">
+    <!-- 01 选择地区与季节 → 生成买菜清单 -->
     <section class="panel form-panel">
       <h2 class="panel-title"><span class="panel-index">01</span>选择地区与季节</h2>
       <form method="post" action="{{ url_for('market') }}">
+        <!-- 健康上下文随表单回传，保证 POST 后过滤不丢失 -->
+        <input type="hidden" name="goal" value="{{ goal }}">
+        <input type="hidden" name="taboos" value="{{ taboos | join(',') }}">
+
         <div class="field">
           <label class="field-label" for="region">所在地区</label>
           <select id="region" name="region" class="select">
@@ -46,18 +65,32 @@
           </select>
         </div>
 
-        <button type="submit" class="btn-primary">推荐买菜清单</button>
+        <button type="submit" class="btn-primary">生成买菜清单</button>
       </form>
     </section>
 
     {% if selected %}
     <section class="results">
+      {% if taboos or goal != '均衡' %}
+      <div class="panel warn-panel">
+        <h2 class="panel-title"><span class="panel-index">!</span>已应用你的健康档案</h2>
+        <ul class="warn-list">
+          <li>健康目标：<strong>{{ goal }}</strong>{% if taboos %}｜禁忌：<strong>{{ taboos | join('、') }}</strong>{% endif %}</li>
+          {% if filtered_info %}
+          <li>以下食材因不适宜你的目标 / 禁忌，已自动剔除：<strong>{{ filtered_info | map(attribute='name') | join('、') }}</strong></li>
+          {% endif %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <!-- 02 买菜清单 -->
       <div class="panel">
         <h2 class="panel-title">
           <span class="panel-index">02</span>「{{ selected.region }}」· {{ selected.season }} 买菜推荐
         </h2>
 
         <h3 class="market-h">🍃 应季时令食材</h3>
+        {% if selected.seasonal %}
         <ul class="market-list">
           {% for d in selected.seasonal %}
           <li>
@@ -66,19 +99,108 @@
           </li>
           {% endfor %}
         </ul>
+        {% else %}
+        <p class="empty">该季节暂无符合你健康要求的时令食材推荐。</p>
+        {% endif %}
 
         <h3 class="market-h">📍 {{ selected.region }} 地方特色食材</h3>
+        {% if selected.regional %}
         <div class="market-tags">
           {% for n in selected.regional %}
           <span class="market-tag">{{ n }}</span>
           {% endfor %}
         </div>
+        {% else %}
+        <p class="empty">暂无符合你健康要求的地方特色食材。</p>
+        {% endif %}
 
-        <a class="btn-secondary" href="{{ url_for('index') }}?ingredients={{ ingredient_param }}">用这些食材生成食谱 →</a>
+        <a class="btn-secondary" href="{{ recipe_link }}">用这些食材生成食谱 →</a>
       </div>
+
+      <!-- 03 上传刚买的菜照片（在买菜清单生成之后） -->
+      <section class="panel form-panel">
+        <h2 class="panel-title"><span class="panel-index">03</span>上传刚买的菜照片 <span class="opt-tag">可选 · AI 评估新鲜度 + 参考价</span></h2>
+        <form method="post" action="{{ url_for('market') }}" enctype="multipart/form-data" onsubmit="startLoading('produce-photo')">
+          <!-- 回传地区/季节/健康上下文，保证照片评估后清单不丢失 -->
+          <input type="hidden" name="region" value="{{ selected.region }}">
+          <input type="hidden" name="month" value="{{ selected.month }}">
+          <input type="hidden" name="goal" value="{{ goal }}">
+          <input type="hidden" name="taboos" value="{{ taboos | join(',') }}">
+          <div class="field">
+            <input type="file" name="produce_photo" id="produce-photo" accept="image/*" class="file-input" multiple>
+            <p class="note">拍照上传菜市场买到的菜（可多张），AI 识别食材、评估品相新鲜度，并给出参考价区间。</p>
+          </div>
+          <button type="submit" class="btn-secondary" style="margin-top:0;cursor:pointer">📷 评估照片</button>
+        </form>
+
+        {% if produce_items %}
+        <ul class="market-list" style="margin-top:18px">
+          {% for p in produce_items %}
+          <li>
+            <span class="market-name">{{ p.emoji }} {{ p.name }}</span>
+            <span class="market-reason">新鲜度：{{ p.freshness }}{% if p.price %}｜参考价：约 {{ p.price }} 元/斤{% endif %}{% if p.note %}｜{{ p.note }}{% endif %}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        <p class="note">参考价为常见市场行情整理的静态区间，非实时价格，请以当地市场实际为准。</p>
+        {% elif produce_status %}
+        <p class="warn-list" style="margin:18px 0 0">{{ produce_status }}</p>
+        {% endif %}
+      </section>
+
       <p class="disclaimer">⚠️ 推荐仅按季节与地域常识整理，供买菜参考。</p>
     </section>
     {% endif %}
   </main>
+
+  <!-- 识别等待的趣味进度遮罩 -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-card">
+      <div class="loading-emoji" id="loading-emoji">🥬</div>
+      <p class="loading-text" id="loading-text">正在给蔬菜做体检…</p>
+      <div class="loading-bar"><div class="loading-fill" id="loading-fill"></div></div>
+      <p class="loading-pct" id="loading-pct">0%</p>
+    </div>
+  </div>
+
+  <script>
+    // 趣味进度条：照片评估等待时展示
+    var LOADING_STEPS = [
+      { emoji: '🥬', text: '正在给蔬菜做体检…' },
+      { emoji: '👀', text: '看看是不是水灵灵的…' },
+      { emoji: '🍅', text: '挨个认一认是什么菜…' },
+      { emoji: '🤖', text: 'AI 正在估算新鲜度…' },
+      { emoji: '💰', text: '正在查参考价…' },
+    ];
+    function startLoading(fileInputId) {
+      var fileInput = document.getElementById(fileInputId);
+      if (fileInput && (!fileInput.files || fileInput.files.length === 0)) return;
+      var overlay = document.getElementById('loading-overlay');
+      if (!overlay) return;
+      overlay.style.display = 'flex';
+      var step = 0, pct = 0;
+      var textEl = document.getElementById('loading-text');
+      var emojiEl = document.getElementById('loading-emoji');
+      var fillEl = document.getElementById('loading-fill');
+      var pctEl = document.getElementById('loading-pct');
+      textEl.textContent = LOADING_STEPS[0].text;
+      emojiEl.textContent = LOADING_STEPS[0].emoji;
+      setInterval(function () {
+        step = (step + 1) % LOADING_STEPS.length;
+        textEl.textContent = LOADING_STEPS[step].text;
+        emojiEl.textContent = LOADING_STEPS[step].emoji;
+      }, 1500);
+      setInterval(function () {
+        if (pct < 90) pct += Math.random() * 6 + 1;
+        else pct += Math.random() * 0.5;
+        if (pct > 97) pct = 90;
+        fillEl.style.width = pct + '%';
+        pctEl.textContent = Math.floor(pct) + '%';
+      }, 220);
+    }
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js'); }
+  </script>
 </body>
 </html>

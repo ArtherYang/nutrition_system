@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>一日饮食规划 · 知食分子</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta name="theme-color" content="#5f7f63">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+  <!-- 顶部导航 -->
+  <nav class="nav">
+    <a class="nav-brand" href="{{ url_for('home') }}">🥗 知食分子</a>
+    <div class="nav-links">
+      <a href="{{ url_for('profile') }}">健康档案</a>
+      <a href="{{ url_for('market') }}">买菜推荐</a>
+      <a href="{{ url_for('index') }}">食谱推荐</a>
+      <a href="{{ url_for('daily') }}" class="active">一日饮食规划</a>
+      <a href="{{ url_for('week') }}">一周食谱</a>
+      <a href="{{ url_for('library') }}">知识库</a>
+      {% if current_user %}
+      <span class="nav-user">👤 {{ current_user }}</span>
+      <a href="{{ url_for('logout') }}">退出</a>
+      {% else %}
+      <a href="{{ url_for('login') }}">登录</a>
+      <a href="{{ url_for('register') }}">注册</a>
+      {% endif %}
+    </div>
+  </nav>
+
+  <header class="hero hero-compact">
+    <div class="hero-inner">
+      <span class="hero-badge">热量缺口 · 三餐安排 · 每日报告</span>
+      <h1 class="hero-title">今天的一日三餐，怎么吃更合理</h1>
+      <p class="hero-sub">按健康档案推荐每日热量缺口，安排早中晚三餐，记录实际摄入，生成当天报告</p>
+    </div>
+  </header>
+
+  <main class="container">
+    {% if not profile_loaded %}
+    <section class="panel warn-panel">
+      <h2 class="panel-title"><span class="panel-index">i</span>尚未建立健康档案</h2>
+      <p class="warn-list" style="margin:0">无法计算 BMR / 热量缺口，其余功能仍可使用。建议先完善健康档案以自动推荐热量目标。</p>
+      <a class="link-btn" href="{{ url_for('profile') }}">去建立健康档案 →</a>
+    </section>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('daily') }}" enctype="multipart/form-data">
+      <input type="hidden" name="goal" value="{{ goal }}">
+      <input type="hidden" name="taboos" value="{{ taboos | join(',') }}">
+      <input type="hidden" name="recipes" value="{{ recipes_param }}">
+
+      <!-- 01 热量目标 -->
+      <section class="panel form-panel">
+        <h2 class="panel-title"><span class="panel-index">01</span>每日热量目标</h2>
+
+        {% if profile_loaded and bmr %}
+        <div class="health-grid daily-targets">
+          <div class="health-stat">
+            <span class="health-num">BMR {{ bmr }}</span>
+            <span class="health-label">基础代谢 kcal/天</span>
+          </div>
+          <div class="health-stat">
+            <span class="health-num">TDEE {{ tdee }}</span>
+            <span class="health-label">每日总消耗 kcal</span>
+          </div>
+          <div class="health-stat">
+            <span class="health-num">建议摄入 {{ target }}</span>
+            <span class="health-label">kcal/天（{{ goal }}）</span>
+          </div>
+          <div class="health-stat gap-stat">
+            <span class="health-num">缺口 {{ gap }}</span>
+            <span class="health-label">kcal/天（TDEE − 目标）</span>
+          </div>
+        </div>
+        {% if gap_desc %}<p class="health-hint">💡 {{ gap_desc }}</p>{% endif %}
+        {% else %}
+        <p class="note">未建立档案或缺少身高体重，无法计算 BMR。请去完善健康档案以自动计算热量目标。</p>
+        {% endif %}
+
+        <div class="field-row" style="margin-top:18px; align-items:flex-end">
+          <label class="mini-field">
+            <span class="mini-label">活动系数（估算 TDEE）</span>
+            <select name="activity" class="select">
+              {% for label, val in activity_options %}
+              <option value="{{ val }}" {% if activity == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button type="submit" name="action" value="plan" class="btn-secondary" style="margin-top:0;cursor:pointer;align-self:flex-end">🔄 更新缺口</button>
+        </div>
+      </section>
+
+      <!-- 02 推荐三餐 -->
+      <section class="panel">
+        <h2 class="panel-title"><span class="panel-index">02</span>推荐三餐安排 <span class="unit">按健康目标 + 禁忌筛选，点击菜品查看做法</span></h2>
+        {% if priority_names %}
+        <div class="link-hint">🔗 已从「一周食谱」带入今天的计划：<strong>{{ priority_names | join('、') }}</strong>。刷新会换一批，可放心调整。</div>
+        {% endif %}
+        <div class="refresh-row">
+          <button type="submit" name="action" value="refresh" class="btn-secondary" style="margin-top:0;cursor:pointer">🔄 刷新三餐</button>
+        </div>
+        <div class="meal-cols">
+          {% for m in meals %}
+          <div class="meal-col">
+            <h3 class="meal-name">{{ m.meal }}
+              <span class="meal-target">{{ m.target }} kcal</span>
+            </h3>
+            {% set recipes = plan[m.meal] %}
+            {% if recipes %}
+              {% for r in recipes %}
+              <details class="meal-recipe">
+                <summary class="meal-recipe-summary">
+                  <span class="meal-recipe-name">{{ r.recipe.name }}</span>
+                  <span class="badge badge-cal">{{ r.calories | int }} kcal</span>
+                </summary>
+                <div class="meal-recipe-detail">
+                  <div class="meal-recipe-meta">
+                    <span class="badge badge-method">{{ r.recipe.method }}</span>
+                    {% if r.recipe.flavor %}<span class="badge badge-flavor">{{ r.recipe.flavor }}</span>{% endif %}
+                    {% for t in r.recipe.tags %}<span class="badge badge-tag">{{ t }}</span>{% endfor %}
+                  </div>
+                  {% if r.recipe.ingredients %}
+                  <p class="meal-recipe-ing">食材：{{ r.recipe.ingredients | join('、') }}</p>
+                  {% endif %}
+                  {% if r.recipe.steps %}
+                  <ol class="steps">
+                    {% for s in r.recipe.steps %}<li>{{ s }}</li>{% endfor %}
+                  </ol>
+                  {% endif %}
+                </div>
+              </details>
+              {% endfor %}
+            {% else %}
+              <p class="empty">暂无符合目标的推荐菜</p>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <!-- 03 记录实际摄入 -->
+      <section class="panel form-panel">
+        <h2 class="panel-title"><span class="panel-index">03</span>记录实际摄入 <span class="opt-tag">照片估算 + 手动调整</span></h2>
+        <p class="note">每餐可上传多张餐食照片，AI 估算食物热量；也可在文本框手动填写「菜名 热量」（每行一项，如「米饭 220」）。</p>
+        <div class="meal-cols">
+          {% for m in meals %}
+          <div class="meal-col meal-intake-col">
+            <h3 class="meal-name">{{ m.meal }}</h3>
+            <label class="mini-label">上传餐食照片（可多张）</label>
+            <input type="file" name="{{ m.meal }}_photo" accept="image/*" multiple class="file-input">
+            <label class="mini-label" style="margin-top:10px">手动记录（菜名 + 热量）</label>
+            <textarea name="manual_{{ m.meal }}" rows="3" placeholder="米饭 220&#10;鸡胸肉 165">{{ manual_texts[m.meal] }}</textarea>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div class="submit-row">
+          <button type="submit" name="action" value="report" class="btn-primary">生成当天报告</button>
+        </div>
+      </section>
+    </form>
+
+    <!-- 04 当天报告 -->
+    {% if report %}
+    <section class="results">
+      <div class="panel">
+        <h2 class="panel-title"><span class="panel-index">04</span>当天饮食报告
+          {% if day_score %}<button type="button" class="link-btn" onclick="sharePoster()" style="float:right;margin-top:-2px">🖼️ 生成分享海报</button>{% endif %}
+        </h2>
+
+        <div class="health-grid daily-targets">
+          <div class="health-stat">
+            <span class="health-num">目标 {{ target if target is not none else '—' }}</span>
+            <span class="health-label">建议摄入 kcal/天</span>
+          </div>
+          <div class="health-stat">
+            <span class="health-num">实际 {{ report.total }}</span>
+            <span class="health-label">实际摄入 kcal/天</span>
+          </div>
+          <div class="health-stat {% if report.diff is not none and report.diff > 0 %}gap-over{% endif %}">
+            <span class="health-num">
+              {% if report.diff is none %}—{% elif report.diff > 0 %}+{{ report.diff }}{% else %}{{ report.diff }}{% endif %}
+            </span>
+            <span class="health-label">
+              {% if report.diff is none %}差值{% elif report.diff > 0 %}超出目标{% elif report.diff < 0 %}低于目标{% else %}达标{% endif %}
+            </span>
+          </div>
+        </div>
+
+        {% if day_score %}
+        <div class="day-score">
+          <div class="day-score-ring" style="background: conic-gradient(var(--accent) {{ day_score.score }}%, #ece5d5 0)">
+            <div class="day-score-ring-inner">
+              <span class="day-score-num">{{ day_score.score }}</span>
+              <span class="day-score-label">健康分</span>
+            </div>
+          </div>
+          <div class="day-score-info">
+            <div class="day-score-stars">
+              {% for i in range(1, 6) %}
+              <span class="star {% if i <= day_score.stars %}on{% endif %}">★</span>
+              {% endfor %}
+              <span class="day-score-ratio">
+                热量{% if day_score.ratio > 0 %}+{{ day_score.ratio }}{% else %}{{ day_score.ratio }}{% endif %}%
+              </span>
+            </div>
+            <p class="day-score-comment">{{ day_score.comment }}</p>
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="report-meals">
+          {% for m in meals %}
+          <div class="report-meal">
+            <h3 class="meal-name">{{ m.meal }}
+              <span class="meal-target">目标 {{ m.target if m.target is not none else '—' }} / 实际 {{ report.per_meal[m.meal] }} kcal</span>
+            </h3>
+            {% if report_actual and report_actual[m.meal] %}
+            <ul class="report-items">
+              {% for it in report_actual[m.meal] %}
+              <li>
+                <span class="report-item-name">{{ it.name }}</span>
+                <span class="report-item-cal">{{ it.calories }} kcal</span>
+                <em class="cat">{{ it.source }}{% if it.note %} · {{ it.note }}{% endif %}</em>
+              </li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            <p class="note">未记录。</p>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      {% if llm_enabled %}
+      <div class="panel llm-panel">
+        <h2 class="panel-title"><span class="panel-index">AI</span>AI 改进建议 <span class="opt-tag">可追问</span></h2>
+        <div class="chat-box" id="chat-box">
+          {% if llm_text %}
+          <div class="chat-msg chat-ai">{{ llm_text }}</div>
+          {% else %}
+          <div class="chat-msg chat-ai">你好，我是你的 AI 营养师。关于今天的饮食报告，有什么想问的吗？</div>
+          {% endif %}
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="chat-input" class="chat-input" placeholder="追问：比如「晚餐是不是吃多了？」">
+          <button type="button" id="chat-send" class="btn-chat">发送</button>
+        </div>
+        <p class="note" id="chat-status"></p>
+      </div>
+      {% endif %}
+
+      <p class="disclaimer">⚠️ 本报告仅为膳食参考，不构成医疗诊断或治疗建议。</p>
+    </section>
+    {% endif %}
+
+    <!-- 05 膳食趋势 + 打卡 -->
+    <section class="panel">
+      <h2 class="panel-title"><span class="panel-index">📈</span>我的膳食趋势</h2>
+      {% if history %}
+      <div class="trend-stats">
+        <div class="trend-stat"><span class="trend-num">{{ log_count }}</span><span class="trend-label">累计记录（天）</span></div>
+        <div class="trend-stat"><span class="trend-num">{{ streak }}</span><span class="trend-label">🔥 连续打卡（天）</span></div>
+        <div class="trend-stat"><span class="trend-num">{{ avg_total }}</span><span class="trend-label">平均实际摄入（kcal）</span></div>
+      </div>
+
+      <div class="trend-chart">
+        {% for h in history[-14:] %}
+        <div class="trend-day" title="{{ h.date }}　目标 {{ h.target }} / 实际 {{ h.total }} kcal">
+          <div class="trend-bars">
+            <div class="trend-bar trend-bar-target" style="height: {{ (h.target / trend_max * 100) | round(1) }}%"></div>
+            <div class="trend-bar trend-bar-actual" style="height: {{ (h.total / trend_max * 100) | round(1) }}%"></div>
+          </div>
+          <div class="trend-date">{{ h.date[5:] }}</div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="trend-legend">
+        <span><i class="legend-dot legend-target"></i>目标摄入</span>
+        <span><i class="legend-dot legend-actual"></i>实际摄入</span>
+      </div>
+
+      {% if weights %}
+      <div class="trend-weight">
+        <span class="trend-weight-title">⚖️ 体重变化：</span>
+        {% for w in weights %}
+        <span class="trend-weight-item">{{ w.date[5:] }} <strong>{{ w.weight }}kg</strong></span>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% else %}
+      <p class="empty">暂无历史记录。每天生成报告后，这里会呈现你的热量趋势与打卡情况。</p>
+      {% endif %}
+    </section>
+
+    <!-- 06 我的成就徽章 -->
+    <section class="panel">
+      <h2 class="panel-title"><span class="panel-index">🏅</span>我的成就 <span class="unit">坚持记录，解锁更多徽章</span></h2>
+      <div class="badge-wall">
+        {% for b in achievements %}
+        <div class="badge-card {% if b.earned %}earned{% else %}locked{% endif %}">
+          <div class="badge-emoji">{{ b.emoji }}</div>
+          <div class="badge-name">{{ b.name }}</div>
+          <div class="badge-desc">{{ b.desc }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+  </main>
+
+  <script>
+    {% if report and day_score %}
+    var posterData = {
+      goal: {{ goal | tojson }},
+      target: {{ target if target is not none else 'null' }},
+      total: {{ report.total }},
+      diff: {{ report.diff if report.diff is not none else 'null' }},
+      score: {{ day_score.score }},
+      stars: {{ day_score.stars }},
+      comment: {{ day_score.comment | tojson }},
+    };
+    function sharePoster() {
+      var d = posterData;
+      var canvas = document.createElement('canvas');
+      canvas.width = 720; canvas.height = 960;
+      var ctx = canvas.getContext('2d');
+
+      // 背景渐变
+      var bg = ctx.createLinearGradient(0, 0, 0, 960);
+      bg.addColorStop(0, '#f7f2e7');
+      bg.addColorStop(0.6, '#eef4e8');
+      bg.addColorStop(1, '#e7efe6');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, 720, 960);
+
+      // 顶部装饰圆
+      ctx.fillStyle = 'rgba(217, 138, 74, 0.12)';
+      ctx.beginPath(); ctx.arc(640, 90, 150, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(95, 127, 99, 0.12)';
+      ctx.beginPath(); ctx.arc(60, 180, 120, 0, Math.PI * 2); ctx.fill();
+
+      ctx.textAlign = 'center';
+      // 品牌
+      ctx.fillStyle = '#5f7f63';
+      ctx.font = 'bold 34px "PingFang SC", "Microsoft YaHei", sans-serif';
+      ctx.fillText('🥗 知食分子 · 今日健康报告', 360, 70);
+      // 日期
+      ctx.fillStyle = '#8a8f80';
+      ctx.font = '22px "PingFang SC", sans-serif';
+      ctx.fillText(new Date().toISOString().slice(0, 10) + ' · 目标 ' + d.goal, 360, 110);
+
+      // 中央分数环
+      var cx = 360, cy = 270, r = 110;
+      ctx.lineWidth = 18;
+      ctx.strokeStyle = '#e5e2d6';
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = '#d98a4a';
+      ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2) * (d.score / 100)); ctx.stroke();
+      ctx.fillStyle = '#2f3529';
+      ctx.font = 'bold 64px "PingFang SC", sans-serif';
+      ctx.fillText(String(d.score), cx, cy - 6);
+      ctx.fillStyle = '#8a8f80';
+      ctx.font = '22px "PingFang SC", sans-serif';
+      ctx.fillText('健康分', cx, cy + 40);
+
+      // 星级
+      ctx.fillStyle = '#f0a63b';
+      ctx.font = '40px sans-serif';
+      var starsStr = '';
+      for (var i = 1; i <= 5; i++) starsStr += (i <= d.stars ? '★' : '☆');
+      ctx.fillText(starsStr, cx, cy + 100);
+
+      // 数据卡片
+      var cardY = 470, cardH = 150;
+      ctx.fillStyle = '#ffffff';
+      roundRect(ctx, 60, cardY, 600, cardH, 18);
+      ctx.fill();
+      var cols = [['目标摄入', d.target != null ? d.target + ' kcal' : '—'], ['实际摄入', d.total + ' kcal'], ['差值', d.diff > 0 ? '+' + d.diff : String(d.diff)]];
+      ctx.textAlign = 'center';
+      for (var c = 0; c < 3; c++) {
+        var x = 160 + c * 200;
+        ctx.fillStyle = '#8a8f80';
+        ctx.font = '20px "PingFang SC", sans-serif';
+        ctx.fillText(cols[c][0], x, cardY + 50);
+        ctx.fillStyle = '#2f3529';
+        ctx.font = 'bold 34px "PingFang SC", sans-serif';
+        ctx.fillText(cols[c][1], x, cardY + 98);
+      }
+
+      // 评语
+      ctx.fillStyle = '#565d50';
+      ctx.font = '24px "PingFang SC", sans-serif';
+      ctx.fillText(d.comment, 360, 690);
+
+      // 底部
+      ctx.fillStyle = '#8a8f80';
+      ctx.font = '20px "PingFang SC", sans-serif';
+      ctx.fillText('做个懂吃的知食分子', 360, 880);
+      ctx.fillText('本报告仅供膳食参考，不构成医疗建议', 360, 915);
+
+      var a = document.createElement('a');
+      a.download = '知食分子健康报告_' + new Date().toISOString().slice(0, 10) + '.png';
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    }
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+    {% endif %}
+    {% if report and llm_enabled %}
+    var chatContext = {{ chat_context | tojson }};
+    var chatHistory = [];
+    {% if llm_text %}
+    chatHistory.push({role: 'assistant', content: {{ llm_text | tojson }}});
+    {% endif %}
+
+    function appendMsg(role, text) {
+      var box = document.getElementById('chat-box');
+      var el = document.createElement('div');
+      el.className = role === 'user' ? 'chat-msg chat-user' : 'chat-msg chat-ai';
+      el.textContent = text;
+      box.appendChild(el);
+      box.scrollTop = box.scrollHeight;
+      return el;
+    }
+
+    function sendChat() {
+      var input = document.getElementById('chat-input');
+      var msg = input.value.trim();
+      if (!msg) return;
+      input.value = '';
+      appendMsg('user', msg);
+      var status = document.getElementById('chat-status');
+      status.textContent = '营养师思考中…';
+      fetch('/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message: msg, history: chatHistory, context: chatContext})
+      }).then(function (r) { return r.json(); }).then(function (data) {
+        status.textContent = '';
+        if (data.error) {
+          appendMsg('ai', '（' + data.error + '）');
+          return;
+        }
+        appendMsg('ai', data.reply);
+        chatHistory.push({role: 'user', content: msg});
+        chatHistory.push({role: 'assistant', content: data.reply});
+      }).catch(function () {
+        status.textContent = '网络错误，请重试';
+      });
+    }
+
+    var chatSend = document.getElementById('chat-send');
+    var chatInput = document.getElementById('chat-input');
+    if (chatSend && chatInput) {
+      chatSend.addEventListener('click', sendChat);
+      chatInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') sendChat();
+      });
+    }
+    {% endif %}
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js'); }
+  </script>
+</body>
+</html>

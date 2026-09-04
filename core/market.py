@@ -102,3 +102,48 @@ def combined_names(result):
             seen.add(n)
             out.append(n)
     return out
+
+
+# 健康目标 → 额外过滤标签（在用户显式禁忌之外，按目标追加的软过滤）。
+# 控糖额外规避高 GI 食材；其余目标主要依赖用户勾选的禁忌，避免误伤健康脂肪等。
+GOAL_EXTRA_TAGS = {
+    "控糖": ["高GI"],
+}
+
+
+def apply_health_filter(result, ingredient_index, taboo_tags, goal):
+    """按健康目标 + 禁忌过滤买菜推荐结果。
+
+    - taboo_tags：已映射到营养库 taboo_tags 的标签集合（来自 HealthGoalManager）。
+    - goal：额外追加 GOAL_EXTRA_TAGS 中的软过滤标签。
+    返回 (过滤后的 result, 被滤项列表 [{name, reason, tags}])。
+    """
+    all_tags = set(taboo_tags or []) | set(GOAL_EXTRA_TAGS.get(goal, []))
+
+    def _hits(name):
+        ing = ingredient_index.get(name)
+        if not ing:
+            return set()
+        return set(ing.get("taboo_tags", [])) & all_tags
+
+    seasonal, regional, filtered = [], [], []
+    for d in result["seasonal"]:
+        hit = _hits(d["name"])
+        if hit:
+            filtered.append({"name": d["name"], "reason": d["reason"], "tags": sorted(hit)})
+        else:
+            seasonal.append(d)
+    for n in result["regional"]:
+        hit = _hits(n)
+        if hit:
+            filtered.append({"name": n, "reason": "地方特色", "tags": sorted(hit)})
+        else:
+            regional.append(n)
+    new_result = {
+        "region": result["region"],
+        "season": result["season"],
+        "month": result["month"],
+        "seasonal": seasonal,
+        "regional": regional,
+    }
+    return new_result, filtered

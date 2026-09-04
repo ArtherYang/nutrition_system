@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>健康档案 · 知食分子</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta name="theme-color" content="#5f7f63">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+  <!-- 顶部导航 -->
+  <nav class="nav">
+    <a class="nav-brand" href="{{ url_for('home') }}">🥗 知食分子</a>
+    <div class="nav-links">
+      <a href="{{ url_for('profile') }}" class="active">健康档案</a>
+      <a href="{{ url_for('market') }}">买菜推荐</a>
+      <a href="{{ url_for('index') }}">食谱推荐</a>
+      <a href="{{ url_for('daily') }}">一日饮食规划</a>
+      <a href="{{ url_for('week') }}">一周食谱</a>
+      <a href="{{ url_for('library') }}">知识库</a>
+      {% if current_user %}
+      <span class="nav-user">👤 {{ current_user }}</span>
+      <a href="{{ url_for('logout') }}">退出</a>
+      {% else %}
+      <a href="{{ url_for('login') }}">登录</a>
+      <a href="{{ url_for('register') }}">注册</a>
+      {% endif %}
+    </div>
+  </nav>
+
+  <header class="hero hero-compact">
+    <div class="hero-inner">
+      <span class="hero-badge">了解自己 · 吃得更好</span>
+      <h1 class="hero-title">建立你的健康档案</h1>
+      <p class="hero-sub">先录入基础信息生成评估，再依据建议确认目标与禁忌，最后按档案推荐买菜</p>
+      <div class="hero-steps">
+        <div class="step"><span class="step-num">1</span><span>健康档案</span></div>
+        <div class="step-arrow">→</div>
+        <div class="step"><span class="step-num">2</span><span>买菜推荐</span></div>
+        <div class="step-arrow">→</div>
+        <div class="step"><span class="step-num">3</span><span>食谱推荐</span></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    {% if saved_at and stage == 'init' %}
+    <div class="panel warn-panel">
+      <h2 class="panel-title"><span class="panel-index">i</span>已加载你的健康档案</h2>
+      <p class="warn-list" style="margin:0">上次保存时间：<strong>{{ saved_at }}</strong>。修改基础信息后重新评估即可。</p>
+    </div>
+    {% endif %}
+
+    <!-- 阶段 1：录入基础信息 -->
+    {% if stage == 'init' %}
+    <section class="panel form-panel">
+      <h2 class="panel-title"><span class="panel-index">01</span>录入基础信息</h2>
+      <form method="post" action="{{ url_for('profile') }}" enctype="multipart/form-data">
+        <input type="hidden" name="stage" value="assess">
+        <div class="field">
+          <label class="field-label">年龄 / 性别 / 身高 / 体重 <span class="opt-tag">用于 BMI 与基础代谢评估</span></label>
+          <div class="field-row">
+            <label class="mini-field">
+              <span class="mini-label">年龄</span>
+              <input type="number" name="age" min="1" max="120" value="{{ age or '' }}" placeholder="岁">
+            </label>
+            <label class="mini-field">
+              <span class="mini-label">性别</span>
+              <select name="gender" class="select">
+                <option value="">—</option>
+                <option value="男" {% if gender == '男' %}selected{% endif %}>男</option>
+                <option value="女" {% if gender == '女' %}selected{% endif %}>女</option>
+              </select>
+            </label>
+            <label class="mini-field">
+              <span class="mini-label">身高</span>
+              <input type="number" name="height" min="50" max="250" value="{{ height or '' }}" placeholder="cm">
+            </label>
+            <label class="mini-field">
+              <span class="mini-label">体重</span>
+              <input type="number" name="weight" min="10" max="300" value="{{ weight or '' }}" placeholder="kg">
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">上传体检单 <span class="opt-tag">可选 · 自动识别异常指标</span></label>
+          <input type="file" name="report" accept="image/*,.pdf" class="file-input" multiple>
+          <p class="note">支持体检报告照片 / 截图 / PDF（可多张），AI 识别血糖、尿酸、血脂、血压等异常项，用于自动建议目标与预填禁忌。</p>
+        </div>
+
+        <button type="submit" class="btn-primary">保存并生成健康评估</button>
+      </form>
+    </section>
+    {% endif %}
+
+    <!-- 阶段 2 / 3 公共：健康画像评估结果 -->
+    {% if stage in ['assessed', 'confirmed'] %}
+    <section class="panel">
+      <h2 class="panel-title"><span class="panel-index">02</span>你的健康画像</h2>
+      {% if health and health.has_profile %}
+      <div class="health-grid">
+        <div class="health-stat">
+          <span class="health-num">BMI {{ health.bmi }}</span>
+          <span class="health-label">{{ health.bmi_category }}</span>
+        </div>
+        <div class="health-stat">
+          <span class="health-num">BMR</span>
+          <span class="health-label">{{ health.bmr }} kcal/天</span>
+        </div>
+        <div class="health-stat">
+          <span class="health-num">理想体重</span>
+          <span class="health-label">{{ health.ideal_range }}</span>
+        </div>
+      </div>
+      {% if suggested_goal %}
+      <p class="health-hint">💡 系统建议目标「<strong>{{ suggested_goal }}</strong>」。</p>
+      {% endif %}
+      {% else %}
+      <p class="empty">未填写身高 / 体重，无法计算 BMI 与基础代谢，你仍可手动选择健康目标。</p>
+      {% endif %}
+
+      {% if report_status %}
+      <p class="health-comment">📋 体检单：{{ report_status }}{% if report_summary %}（{{ report_summary }}）{% endif %}</p>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    <!-- 阶段 2：确认健康目标与禁忌 -->
+    {% if stage == 'assessed' %}
+    <section class="panel form-panel">
+      <h2 class="panel-title"><span class="panel-index">03</span>确认健康目标与禁忌</h2>
+      <form method="post" action="{{ url_for('profile') }}">
+        <input type="hidden" name="stage" value="confirm">
+        <div class="field">
+          <label class="field-label">选择健康目标 <span class="opt-tag">已按评估结果预填，可调整</span></label>
+          <div class="goal-group">
+            {% for g in goals %}
+            <label class="goal-pill">
+              <input type="radio" name="goal" value="{{ g }}" {% if goal == g %}checked{% endif %}>
+              <span>{{ g }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <p id="goal-hint" class="health-comment"></p>
+        </div>
+
+        <div class="field">
+          <label class="field-label">禁忌 / 过敏原 / 基础疾病 <span class="opt-tag">体检单异常项已自动勾选</span></label>
+          <div class="taboo-group">
+            {% for label, cat in taboo_options.items() %}
+            <label class="taboo-chip">
+              <input type="checkbox" name="taboos" value="{{ label }}" {% if label in taboos %}checked{% endif %}>
+              <span>{{ label }}</span>
+              <em class="cat">{{ cat }}</em>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary">确认并保存 →</button>
+        <p class="note" style="margin-top:12px">目标与禁忌已按评估结果预填，确认后即可用这份档案去推荐买菜。</p>
+      </form>
+    </section>
+    {% endif %}
+
+    <!-- 阶段 3：已确认，去推荐买菜 -->
+    {% if stage == 'confirmed' %}
+    <section class="results">
+      <div class="panel">
+        <h2 class="panel-title"><span class="panel-index">03</span>已保存的健康档案</h2>
+        <ul class="warn-list">
+          <li>健康目标：<strong>{{ goal }}</strong></li>
+          <li>禁忌：{% if taboos %}<strong>{{ taboos | join('、') }}</strong>{% else %}无{% endif %}</li>
+        </ul>
+      </div>
+
+      <a class="btn-secondary" href="{{ market_link }}">用这份健康档案去推荐买菜 →</a>
+      <p class="disclaimer">⚠️ 本系统建议仅供膳食参考，不构成医疗诊断或治疗建议。</p>
+    </section>
+    {% endif %}
+  </main>
+
+  <script>
+    // 目标选择与 BMI 冲突时给出软性提示（先评后选的引导）
+    var BMI_CAT = "{{ (health.bmi_category if health else '') or '' }}";
+    var HINTS = {
+      '超重': {'增肌': '当前 BMI 处于「超重」区间，选择增肌可能增加体重负担，建议优先「减脂」或「均衡」。'},
+      '肥胖': {'增肌': '当前 BMI 处于「肥胖」区间，选择增肌可能增加体重负担，建议优先「减脂」或「均衡」。'},
+      '偏瘦': {'减脂': '当前 BMI 偏低（偏瘦），不建议继续减脂，建议选择「增肌」或「均衡」目标。'},
+    };
+    function refreshGoalHint() {
+      var sel = '';
+      document.querySelectorAll('input[name="goal"]').forEach(function (r) {
+        if (r.checked) sel = r.value;
+      });
+      var msg = (HINTS[BMI_CAT] || {})[sel] || '';
+      var el = document.getElementById('goal-hint');
+      if (el) el.textContent = msg ? ('⚠️ ' + msg) : '';
+    }
+    document.querySelectorAll('input[name="goal"]').forEach(function (r) {
+      r.addEventListener('change', refreshGoalHint);
+    });
+    refreshGoalHint();
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js'); }
+  </script>
+</body>
+</html>

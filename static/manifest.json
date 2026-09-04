@@ -1,0 +1,15 @@
+{
+  "name": "知食分子",
+  "short_name": "营养膳食",
+  "description": "个性化膳食管理：健康档案、买菜推荐、食谱推荐、一日饮食规划与营养知识库",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f1e8",
+  "theme_color": "#5f7f63",
+  "icons": [
+    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

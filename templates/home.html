@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>知食分子</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta name="theme-color" content="#5f7f63">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+  <!-- 顶部导航 -->
+  <nav class="nav">
+    <a class="nav-brand" href="{{ url_for('home') }}">🥗 知食分子</a>
+    <div class="nav-links">
+      <a href="{{ url_for('profile') }}">健康档案</a>
+      <a href="{{ url_for('market') }}">买菜推荐</a>
+      <a href="{{ url_for('index') }}">食谱推荐</a>
+      <a href="{{ url_for('daily') }}">一日饮食规划</a>
+      <a href="{{ url_for('week') }}">一周食谱</a>
+      <a href="{{ url_for('library') }}">知识库</a>
+      {% if current_user %}
+      <span class="nav-user">👤 {{ current_user }}</span>
+      <a href="{{ url_for('logout') }}">退出</a>
+      {% else %}
+      <a href="{{ url_for('login') }}">登录</a>
+      <a href="{{ url_for('register') }}">注册</a>
+      {% endif %}
+    </div>
+  </nav>
+
+  <!-- 封面主视觉 -->
+  <header class="home-hero">
+    <div class="home-deco" aria-hidden="true">
+      <span class="home-deco-e home-deco-1">🥦</span>
+      <span class="home-deco-e home-deco-2">🍅</span>
+      <span class="home-deco-e home-deco-3">🥕</span>
+      <span class="home-deco-e home-deco-4">🍋</span>
+      <span class="home-deco-e home-deco-5">🍚</span>
+      <span class="home-deco-e home-deco-6">🥑</span>
+    </div>
+    <div class="home-hero-inner">
+      <span class="home-badge">🥗 智能营养 · 个性化膳食管家</span>
+      <h1 class="home-title">好好吃饭，<br>从了解自己开始</h1>
+      <p class="home-sub">一份健康档案，串联「吃什么 · 买什么 · 怎么吃 · 吃得对不对」全流程，<br>让每一餐都更懂你的身体。</p>
+      <div class="home-cta">
+        <a class="home-btn home-btn-primary" href="{{ url_for('profile') }}">
+          {% if profile_loaded %}查看我的健康档案{% else %}建立健康档案 · 开始{% endif %}
+        </a>
+        <a class="home-btn home-btn-ghost" href="#features">浏览五大功能 ↓</a>
+        <button type="button" class="home-btn home-btn-shake" onclick="shakeMeal()">🎲 不知道吃什么？摇一摇</button>
+      </div>
+
+      <!-- 数据亮点 -->
+      <div class="home-stats">
+        <div class="home-stat"><span class="home-stat-num">5</span><span class="home-stat-label">功能模块</span></div>
+        <div class="home-stat"><span class="home-stat-num">AI</span><span class="home-stat-label">大模型驱动</span></div>
+        <div class="home-stat"><span class="home-stat-num">24h</span><span class="home-stat-label">全天膳食管理</span></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 功能入口 -->
+  <main class="container" id="features">
+    <section class="home-section-head">
+      <h2 class="home-section-title">五大功能，一站式膳食管理</h2>
+      <p class="home-section-sub">从建立档案到每日复盘，形成完整闭环</p>
+    </section>
+
+    <div class="feature-grid">
+      <a class="feature-card" href="{{ url_for('profile') }}">
+        <span class="feature-icon">📋</span>
+        <span class="feature-num">01</span>
+        <h3 class="feature-title">健康档案</h3>
+        <p class="feature-desc">录入身高体重，自动计算 BMI、基础代谢与理想体重；上传体检单，智能识别异常指标。</p>
+        <span class="feature-link">建立我的档案 →</span>
+      </a>
+
+      <a class="feature-card" href="{{ url_for('market') }}">
+        <span class="feature-icon">🛒</span>
+        <span class="feature-num">02</span>
+        <h3 class="feature-title">买菜推荐</h3>
+        <p class="feature-desc">按地区与当季月份生成应季清单；上传蔬菜照片，AI 评估新鲜度与参考价。</p>
+        <span class="feature-link">生成买菜清单 →</span>
+      </a>
+
+      <a class="feature-card" href="{{ url_for('index') }}">
+        <span class="feature-icon">🍳</span>
+        <span class="feature-num">03</span>
+        <h3 class="feature-title">食谱推荐</h3>
+        <p class="feature-desc">拍照识别冰箱食材，结合健康目标与禁忌，输出个性化菜谱与可追问的 AI 点评。</p>
+        <span class="feature-link">今晚吃什么 →</span>
+      </a>
+
+      <a class="feature-card" href="{{ url_for('daily') }}">
+        <span class="feature-icon">📅</span>
+        <span class="feature-num">04</span>
+        <h3 class="feature-title">一日饮食规划</h3>
+        <p class="feature-desc">自动计算每日热量缺口，安排三餐；上传餐食照片估算实际摄入，生成当天报告。</p>
+        <span class="feature-link">规划今天三餐 →</span>
+      </a>
+
+      <a class="feature-card feature-card-wide" href="{{ url_for('library') }}">
+        <span class="feature-icon">📚</span>
+        <span class="feature-num">05</span>
+        <h3 class="feature-title">食材菜谱知识库</h3>
+        <p class="feature-desc">集中浏览全部食材营养数据与菜谱做法，支持按名称、类别、口味、标签一键检索。</p>
+        <span class="feature-link">检索知识库 →</span>
+      </a>
+    </div>
+
+    <!-- 闭环示意 -->
+    <section class="home-flow">
+      <div class="home-flow-item"><span class="home-flow-dot">1</span><span>健康档案</span></div>
+      <span class="home-flow-arrow">→</span>
+      <div class="home-flow-item"><span class="home-flow-dot">2</span><span>买菜推荐</span></div>
+      <span class="home-flow-arrow">→</span>
+      <div class="home-flow-item"><span class="home-flow-dot">3</span><span>食谱推荐</span></div>
+      <span class="home-flow-arrow">→</span>
+      <div class="home-flow-item"><span class="home-flow-dot">4</span><span>一日饮食规划</span></div>
+    </section>
+
+    <section class="home-bottom-cta">
+      <h2 class="home-section-title">准备好让每一餐更健康了吗？</h2>
+      <a class="home-btn home-btn-primary" href="{{ url_for('profile') }}">立即开始 →</a>
+    </section>
+
+    <p class="disclaimer">⚠️ 本系统建议仅供膳食参考，不构成医疗诊断或治疗建议。</p>
+  </main>
+
+  <!-- 摇一摇结果模态框 -->
+  <div class="modal-overlay" id="shake-modal">
+    <div class="modal-card">
+      <div class="modal-close" onclick="closeShake()">✕</div>
+      <div class="shake-emoji" id="shake-emoji">🎲</div>
+      <h3 class="shake-title" id="shake-title">正在为你摇一道菜…</h3>
+      <p class="shake-sub" id="shake-sub"></p>
+      <div class="shake-detail" id="shake-detail"></div>
+      <button type="button" class="home-btn home-btn-primary" onclick="shakeMeal()">🎲 再摇一次</button>
+    </div>
+  </div>
+
+  <script>
+    function shakeMeal() {
+      var modal = document.getElementById('shake-modal');
+      modal.style.display = 'flex';
+      var emoji = document.getElementById('shake-emoji');
+      var title = document.getElementById('shake-title');
+      var sub = document.getElementById('shake-sub');
+      var detail = document.getElementById('shake-detail');
+      emoji.textContent = '🎲';
+      title.textContent = '正在摇一摇…';
+      sub.textContent = '';
+      detail.innerHTML = '';
+      fetch('/random_recipe').then(function (r) { return r.json(); }).then(function (d) {
+        if (d.error) { title.textContent = '（' + d.error + '）'; return; }
+        var emojis = {'炒':'🍳','煎':'🍳','炸':'🍤','蒸':'🥟','煮':'🍲','炖':'🍲','焖':'🍲','烧':'🍖','烤':'🍢','拌':'🥗','饮':'🥤'};
+        emoji.textContent = emojis[d.method] || '🍽️';
+        title.textContent = d.name;
+        var meta = [];
+        if (d.method) meta.push(d.method);
+        if (d.region) meta.push(d.region);
+        if (d.flavor) meta.push('口味 ' + d.flavor);
+        if (d.calories != null) meta.push('约 ' + d.calories + ' kcal');
+        sub.textContent = meta.join(' · ');
+        var html = '';
+        if (d.tags && d.tags.length) html += '<div class="shake-tags">' + d.tags.map(function (t) { return '<span class="badge badge-tag">' + t + '</span>'; }).join('') + '</div>';
+        if (d.steps && d.steps.length) html += '<ol class="steps">' + d.steps.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ol>';
+        detail.innerHTML = html;
+      }).catch(function () { title.textContent = '（网络错误，请重试）'; });
+    }
+    function closeShake() {
+      document.getElementById('shake-modal').style.display = 'none';
+    }
+    document.getElementById('shake-modal').addEventListener('click', function (e) {
+      if (e.target === this) closeShake();
+    });
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js'); }
+  </script>
+</body>
+</html>

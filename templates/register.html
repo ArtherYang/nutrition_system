@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>注册 · 知食分子</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta name="theme-color" content="#5f7f63">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+  <nav class="nav">
+    <a class="nav-brand" href="{{ url_for('home') }}">🥗 知食分子</a>
+    <div class="nav-links">
+      <a href="{{ url_for('home') }}">首页</a>
+      <a href="{{ url_for('login') }}">登录</a>
+    </div>
+  </nav>
+
+  <header class="hero hero-compact">
+    <div class="hero-inner">
+      <span class="hero-badge">✨ 注册</span>
+      <h1 class="hero-title">创建你的营养档案</h1>
+      <p class="hero-sub">注册后即可保存健康档案、每日饮食记录与打卡</p>
+    </div>
+  </header>
+
+  <main class="container" style="max-width: 460px">
+    <section class="panel form-panel">
+      <form method="post" action="{{ url_for('register') }}">
+        {% if error %}<div class="form-error">{{ error }}</div>{% endif %}
+        <div class="field">
+          <label class="field-label">用户名</label>
+          <input type="text" name="username" value="{{ username }}" required autofocus autocomplete="username">
+        </div>
+        <div class="field">
+          <label class="field-label">密码 <span class="opt-tag">至少 4 位</span></label>
+          <input type="password" name="password" required autocomplete="new-password">
+        </div>
+        <div class="field">
+          <label class="field-label">确认密码</label>
+          <input type="password" name="confirm" required autocomplete="new-password">
+        </div>
+        <button type="submit" class="btn-primary">注册并开始</button>
+        <p class="note" style="margin-top:14px;text-align:center">已有账号？<a class="link-btn" href="{{ url_for('login') }}">直接登录</a></p>
+      </form>
+    </section>
+  </main>
+  <script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js'); }
+  </script>
+</body>
+</html>

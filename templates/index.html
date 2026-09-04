@@ -3,16 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>智能营养膳食制作与推荐系统</title>
+  <title>知食分子</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta name="theme-color" content="#5f7f63">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 </head>
 <body>
   <!-- 顶部导航 -->
   <nav class="nav">
-    <a class="nav-brand" href="{{ url_for('index') }}">🥗 智能营养膳食</a>
+    <a class="nav-brand" href="{{ url_for('home') }}">🥗 知食分子</a>
     <div class="nav-links">
-      <a href="{{ url_for('index') }}" class="active">食谱推荐</a>
+      <a href="{{ url_for('profile') }}">健康档案</a>
       <a href="{{ url_for('market') }}">买菜推荐</a>
+      <a href="{{ url_for('index') }}" class="active">食谱推荐</a>
+      <a href="{{ url_for('daily') }}">一日饮食规划</a>
+      <a href="{{ url_for('week') }}">一周食谱</a>
+      <a href="{{ url_for('library') }}">知识库</a>
+      {% if current_user %}
+      <span class="nav-user">👤 {{ current_user }}</span>
+      <a href="{{ url_for('logout') }}">退出</a>
+      {% else %}
+      <a href="{{ url_for('login') }}">登录</a>
+      <a href="{{ url_for('register') }}">注册</a>
+      {% endif %}
     </div>
   </nav>
 
@@ -33,13 +47,29 @@
   </header>
 
   <main class="container">
+    {% if profile_loaded %}
+    <!-- 已加载健康档案：健康档案为唯一权威来源，食谱页自动读取 -->
+    <section class="panel warn-panel">
+      <h2 class="panel-title"><span class="panel-index">i</span>已加载你的健康档案</h2>
+      <ul class="warn-list">
+        {% if preset_health and preset_health.has_profile %}
+        <li>BMI <strong>{{ preset_health.bmi }}</strong>（{{ preset_health.bmi_category }}）｜基础代谢 <strong>{{ preset_health.bmr }}</strong> kcal/天｜理想体重 {{ preset_health.ideal_range }}</li>
+        {% endif %}
+        <li>健康目标：<strong>{{ preset_goal }}</strong>{% if preset_taboos %}｜禁忌：<strong>{{ preset_taboos | join('、') }}</strong>{% endif %}</li>
+      </ul>
+      <a class="link-btn" href="{{ url_for('profile') }}">✏️ 去修改健康档案 →</a>
+    </section>
+    {% endif %}
+
     <!-- 拍照识别（独立步骤：识别 → 输出 → 回填文本框） -->
     <section class="panel form-panel recognize-panel">
       <h2 class="panel-title"><span class="panel-index">📷</span>拍照识别食材 <span class="opt-tag">可选</span></h2>
       <p class="note">上传冰箱照片，点「识别图片」后，识别出的食材名会自动填入下方输入框，可手动修改再生成食谱。</p>
-      <form method="post" action="{{ url_for('recognize') }}" enctype="multipart/form-data" class="recognize-form" onsubmit="syncExisting()">
+      <form method="post" action="{{ url_for('recognize') }}" enctype="multipart/form-data" class="recognize-form" onsubmit="syncExisting(); syncHealth(); startLoading('recognize-image')">
         <input type="hidden" name="existing" id="existing-ingredients">
-        <input type="file" name="image" accept="image/*" class="file-input" id="recognize-image">
+        <input type="hidden" name="goal" id="existing-goal">
+        <input type="hidden" name="taboos" id="existing-taboos">
+        <input type="file" name="image" accept="image/*" class="file-input" id="recognize-image" multiple>
         <button type="submit" class="btn-secondary">🔍 识别图片</button>
       </form>
       {% if recognize_done %}
@@ -67,7 +97,7 @@
             {% for g in goals %}
             <label class="goal-pill">
               <input type="radio" name="goal" value="{{ g }}"
-                     {% if (submitted and goal == g) or (not submitted and g == '减脂') %}checked{% endif %}>
+                     {% if (submitted and goal == g) or (not submitted and g == preset_goal) %}checked{% endif %}>
               <span>{{ g }}</span>
             </label>
             {% endfor %}
@@ -78,6 +108,7 @@
           <label class="field-label" for="ingredients">
             输入现有食材
             <button type="button" class="link-btn" onclick="fillDemo()">🎯 一键填演示数据</button>
+            <button type="button" class="link-btn" id="voice-btn" onclick="toggleVoice()">🎤 语音报菜名</button>
           </label>
           <textarea id="ingredients" name="ingredients" rows="2"
                     placeholder="例如：鸡蛋 西红柿 鸡胸肉 西兰花">{{ ingredients_input or '' }}</textarea>
@@ -89,37 +120,11 @@
             {% for label, cat in taboo_options.items() %}
             <label class="taboo-chip">
               <input type="checkbox" name="taboos" value="{{ label }}"
-                     {% if submitted and label in taboos %}checked{% endif %}>
+                     {% if (submitted and label in taboos) or (not submitted and label in preset_taboos) %}checked{% endif %}>
               <span>{{ label }}</span>
               <em class="cat">{{ cat }}</em>
             </label>
             {% endfor %}
-          </div>
-        </div>
-
-        <div class="field">
-          <label class="field-label">健康档案（用于健康评估）<span class="opt-tag">可选</span></label>
-          <div class="field-row">
-            <label class="mini-field">
-              <span class="mini-label">年龄</span>
-              <input type="number" id="age" name="age" min="1" max="120" value="{{ age or '' }}" placeholder="岁">
-            </label>
-            <label class="mini-field">
-              <span class="mini-label">性别</span>
-              <select id="gender" name="gender" class="select">
-                <option value="">—</option>
-                <option value="男" {% if gender == '男' %}selected{% endif %}>男</option>
-                <option value="女" {% if gender == '女' %}selected{% endif %}>女</option>
-              </select>
-            </label>
-            <label class="mini-field">
-              <span class="mini-label">身高</span>
-              <input type="number" id="height" name="height" min="50" max="250" value="{{ height or '' }}" placeholder="cm">
-            </label>
-            <label class="mini-field">
-              <span class="mini-label">体重</span>
-              <input type="number" id="weight" name="weight" min="10" max="300" value="{{ weight or '' }}" placeholder="kg">
-            </label>
           </div>
         </div>
 
@@ -178,7 +183,7 @@
           <li>你输入的「{{ f.item.name }}」命中禁忌 <strong>{{ f.tags | join('、') }}</strong>，已自动过滤。</li>
           {% endfor %}
           {% if filtered_recipe_names %}
-          <li>以下菜谱含你的禁忌食材，已过滤：<strong>{{ filtered_recipe_names | join('、') }}</strong></li>
+          <li>以下菜谱含你的禁忌食材，已过滤：<strong>{{ filtered_recipe_names[:5] | join('、') }}{% if filtered_recipe_names | length > 5 %} 等 {{ filtered_recipe_names | length }} 道{% endif %}</strong></li>
           {% endif %}
         </ul>
       </div>
@@ -226,6 +231,12 @@
           </table>
         </div>
         <p class="note">* 合计按每种食材 100g 估算，实际请按烹饪用量调整。</p>
+        {% if nutrition_llm %}
+        <div class="nutrition-llm">
+          <span class="nutrition-llm-title">🤖 AI 营养解读</span>
+          <p>{{ nutrition_llm }}</p>
+        </div>
+        {% endif %}
       </div>
       {% endif %}
 
@@ -236,6 +247,7 @@
         <div class="recipe-list">
           {% for r in recommendations %}
           <div class="recipe">
+            <div class="recipe-thumb">{{ method_emoji.get(r.recipe.method, '🍽️') }}<span class="recipe-thumb-method">{{ r.recipe.method }}</span></div>
             <div class="recipe-head">
               <h3 class="recipe-name">{{ r.recipe.name }}</h3>
               <div class="recipe-meta">
@@ -263,16 +275,28 @@
           </div>
           {% endfor %}
         </div>
+        <a class="btn-secondary" href="{{ url_for('daily', recipes=recommendations | map(attribute='recipe') | map(attribute='name') | join(','), goal=goal, taboos=taboos | join(',')) }}">用这些菜谱安排一日三餐 →</a>
         {% else %}
         <p class="empty">暂无匹配菜谱，请尝试输入更多常见食材。</p>
         {% endif %}
       </div>
 
-      <!-- 大模型点评 -->
-      {% if llm_text %}
+      <!-- AI 营养师点评（可交互：先评后聊） -->
+      {% if llm_enabled %}
       <div class="panel llm-panel">
-        <h2 class="panel-title"><span class="panel-index">AI</span>AI 营养师点评</h2>
-        <div class="llm-text">{{ llm_text }}</div>
+        <h2 class="panel-title"><span class="panel-index">AI</span>AI 营养师点评 <span class="opt-tag">可追问</span></h2>
+        <div class="chat-box" id="chat-box">
+          {% if llm_text %}
+          <div class="chat-msg chat-ai">{{ llm_text }}</div>
+          {% else %}
+          <div class="chat-msg chat-ai">你好，我是你的 AI 营养师。关于本次推荐，有什么想问的吗？比如某道菜的热量、是否适合你的目标等。</div>
+          {% endif %}
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="chat-input" class="chat-input" placeholder="追问：比如「这道菜热量高吗？」">
+          <button type="button" id="chat-send" class="btn-chat">发送</button>
+        </div>
+        <p class="note" id="chat-status"></p>
       </div>
       {% endif %}
 
@@ -289,18 +313,157 @@
     {% endif %}
   </main>
 
+  <!-- 识别等待的趣味进度遮罩 -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-card">
+      <div class="loading-emoji" id="loading-emoji">🧊</div>
+      <p class="loading-text" id="loading-text">正在打开冰箱门…</p>
+      <div class="loading-bar"><div class="loading-fill" id="loading-fill"></div></div>
+      <p class="loading-pct" id="loading-pct">0%</p>
+    </div>
+  </div>
+
   <script>
+    // 趣味进度条：识别等待时展示，让等待不无聊
+    var LOADING_STEPS = [
+      { emoji: '🧊', text: '正在打开冰箱门…' },
+      { emoji: '🥕', text: '翻找每一层食材…' },
+      { emoji: '🔍', text: '放大镜扫描识别中…' },
+      { emoji: '🤖', text: 'AI 营养师正在辨认…' },
+      { emoji: '📝', text: '正在整理食材清单…' },
+    ];
+    function startLoading(fileInputId) {
+      var fileInput = document.getElementById(fileInputId);
+      if (fileInput && (!fileInput.files || fileInput.files.length === 0)) return; // 没选文件不弹
+      var overlay = document.getElementById('loading-overlay');
+      if (!overlay) return;
+      overlay.style.display = 'flex';
+      var step = 0, pct = 0;
+      var textEl = document.getElementById('loading-text');
+      var emojiEl = document.getElementById('loading-emoji');
+      var fillEl = document.getElementById('loading-fill');
+      var pctEl = document.getElementById('loading-pct');
+      textEl.textContent = LOADING_STEPS[0].text;
+      emojiEl.textContent = LOADING_STEPS[0].emoji;
+      setInterval(function () {  // 文案轮播
+        step = (step + 1) % LOADING_STEPS.length;
+        textEl.textContent = LOADING_STEPS[step].text;
+        emojiEl.textContent = LOADING_STEPS[step].emoji;
+      }, 1500);
+      setInterval(function () {  // 进度条：快速逼近 90% 后缓慢爬升，永不真到 100
+        if (pct < 90) pct += Math.random() * 6 + 1;
+        else pct += Math.random() * 0.5;
+        if (pct > 97) pct = 90;
+        fillEl.style.width = pct + '%';
+        pctEl.textContent = Math.floor(pct) + '%';
+      }, 220);
+    }
+
     function syncExisting() {
       document.getElementById('existing-ingredients').value = document.getElementById('ingredients').value;
     }
+    function syncHealth() {
+      var goal = document.querySelector('input[name="goal"]:checked');
+      document.getElementById('existing-goal').value = goal ? goal.value : '均衡';
+      var boxes = document.querySelectorAll('input[name="taboos"]:checked');
+      var arr = [];
+      boxes.forEach(function (b) { arr.push(b.value); });
+      document.getElementById('existing-taboos').value = arr.join(',');
+    }
     function fillDemo() {
       document.getElementById('ingredients').value = '鸡蛋 西红柿 鸡胸肉 西兰花';
-      document.getElementById('age').value = '28';
-      document.getElementById('gender').value = '女';
-      document.getElementById('height').value = '162';
-      document.getElementById('weight').value = '60';
       document.getElementById('ingredients').focus();
     }
+
+    // ---------- 语音报菜名（Web Speech API，Chrome/Edge 支持，需 localhost 或 https）----------
+    var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var voiceListening = false;
+    function toggleVoice() {
+      var btn = document.getElementById('voice-btn');
+      if (!SpeechRec) {
+        alert('当前浏览器不支持语音识别，请改用 Chrome / Edge，并通过 localhost 或 https 访问。');
+        return;
+      }
+      if (voiceListening) {
+        voiceListening = false;
+        if (window._rec) window._rec.stop();
+        btn.textContent = '🎤 语音报菜名';
+        return;
+      }
+      var rec = new SpeechRec();
+      rec.lang = 'zh-CN';
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      voiceListening = true;
+      window._rec = rec;
+      btn.textContent = '🔴 正在听，说「鸡蛋、西红柿、鸡胸肉」…（再点结束）';
+      rec.onresult = function (e) {
+        var text = '';
+        for (var i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+        var ta = document.getElementById('ingredients');
+        ta.value = (ta.value ? ta.value.trim() + ' ' : '') + text.trim();
+      };
+      rec.onend = function () { voiceListening = false; btn.textContent = '🎤 语音报菜名'; };
+      rec.onerror = function () { voiceListening = false; btn.textContent = '🎤 语音报菜名'; };
+      rec.start();
+    }
+
+    // ---------- 可交互 AI 营养师点评师 ----------
+    {% if llm_enabled %}
+    var chatContext = {{ chat_context | tojson }};
+    var chatHistory = [];
+    {% if llm_text %}
+    chatHistory.push({role: 'assistant', content: {{ llm_text | tojson }}});
+    {% endif %}
+
+    function appendMsg(role, text) {
+      var box = document.getElementById('chat-box');
+      var el = document.createElement('div');
+      el.className = role === 'user' ? 'chat-msg chat-user' : 'chat-msg chat-ai';
+      el.textContent = text;
+      box.appendChild(el);
+      box.scrollTop = box.scrollHeight;
+      return el;
+    }
+
+    function sendChat() {
+      var input = document.getElementById('chat-input');
+      var msg = input.value.trim();
+      if (!msg) return;
+      input.value = '';
+      appendMsg('user', msg);
+      var status = document.getElementById('chat-status');
+      status.textContent = '营养师思考中…';
+      fetch('/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message: msg, history: chatHistory, context: chatContext})
+      }).then(function (r) { return r.json(); }).then(function (data) {
+        status.textContent = '';
+        if (data.error) {
+          appendMsg('ai', '（' + data.error + '）');
+          return;
+        }
+        appendMsg('ai', data.reply);
+        chatHistory.push({role: 'user', content: msg});
+        chatHistory.push({role: 'assistant', content: data.reply});
+      }).catch(function () {
+        status.textContent = '网络错误，请重试';
+      });
+    }
+
+    var chatSend = document.getElementById('chat-send');
+    var chatInput = document.getElementById('chat-input');
+    if (chatSend && chatInput) {
+      chatSend.addEventListener('click', sendChat);
+      chatInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') sendChat();
+      });
+    }
+    {% endif %}
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js'); }
   </script>
 </body>
 </html>

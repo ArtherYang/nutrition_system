@@ -22,17 +22,19 @@ GOAL_PROFILES = {
     },
 }
 
-# 慢病禁忌 → 食材 taboo_tags 中的过滤标签
+# 慢病禁忌 → 食材 taboo_tags 中的过滤标签（可多标签）。
+# 痛风/高尿酸血症除「高嘌呤」外还规避「海鲜」——海鲜嘌呤含量普遍较高，
+# 而营养库中海鲜主要被打上过敏原「海鲜」标签，仅 4 种被标「高嘌呤」。
 CONDITION_TAG_MAP = {
-    "糖尿病（控糖）": "高GI",
-    "痛风（高嘌呤）": "高嘌呤",
-    "高血压（高钠）": "高钠",
-    "高血脂（高脂）": "高脂",
-    "脂肪肝": "高脂",
-    "冠心病": "高脂",
-    "胆结石/胆囊炎": "高脂",
-    "甲亢（忌碘）": "高碘",
-    "高尿酸血症": "高嘌呤",
+    "糖尿病（控糖）": ["高GI"],
+    "痛风（高嘌呤）": ["高嘌呤", "海鲜"],
+    "高血压（高钠）": ["高钠"],
+    "高血脂（高脂）": ["高脂"],
+    "脂肪肝": ["高脂"],
+    "冠心病": ["高脂"],
+    "胆结石/胆囊炎": ["高脂"],
+    "甲亢（忌碘）": ["高碘"],
+    "高尿酸血症": ["高嘌呤", "海鲜"],
 }
 
 
@@ -63,7 +65,7 @@ class HealthGoalManager:
             if t in config.TABOO_OPTIONS and config.TABOO_OPTIONS[t] == "过敏原":
                 tags.add(t)
             elif t in CONDITION_TAG_MAP:
-                tags.add(CONDITION_TAG_MAP[t])
+                tags.update(CONDITION_TAG_MAP[t])
         return tags
 
     def get_profile(self):

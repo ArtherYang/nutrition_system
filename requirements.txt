@@ -2,3 +2,4 @@ flask>=3.0
 requests>=2.31
 ultralytics>=8.0
 pillow>=10.0
+pymupdf>=1.24

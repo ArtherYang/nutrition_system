@@ -60,10 +60,16 @@ class RecipeRecommender:
         else:
             tag_match = 0.3
 
+        # 主料加权：鼓励优先推荐「主料更丰富、且能用上用户更多现有食材」的菜，
+        # 避免只有 1 个主料就 100% 覆盖的过简菜抢占排名。
+        richness = min(len(main), 4) / 4.0           # 主料丰富度（0.25~1.0，≥4 封顶）
+        utilization = len(avail) / max(len(available_names), 1)  # 食材利用率
+
         # 仅对主食材（不含油盐等常备调味料）计算营养适配分
         nutrition = self._nutrition_fitness(main, weights)
-        # 覆盖度主导 + 目标匹配 + 营养适配
-        score = 55 * coverage + 30 * tag_match + 15 * nutrition
+        # 覆盖度主导 + 主料加权 + 目标匹配 + 营养适配
+        score = (45 * coverage + 10 * richness + 15 * utilization
+                 + 20 * tag_match + 10 * nutrition)
         return score, avail, missing, coverage
 
     # ---------- 推荐入口 ----------
@@ -94,7 +100,8 @@ class RecipeRecommender:
         """调用 DeepSeek 生成增强文案；未配置 key 或失败时返回 None（降级）。"""
         return llm.chat(
             system="你是一位注册营养师，请基于给定食材与健康目标，"
-                   "给出简洁、可执行、安全（不含医疗建议）的个性化食谱与搭配建议。",
+                   "给出简洁、可执行、安全（不含医疗建议）的个性化食谱与搭配建议。"
+                   "请用纯文本回答，不要使用 Markdown 语法（不要 **、#、- 等符号）。",
             user=self._build_prompt(profile, ingredient_names, top_recipes),
         )
 

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>一周食谱计划 · 知食分子</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta name="theme-color" content="#5f7f63">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+  <!-- 顶部导航 -->
+  <nav class="nav">
+    <a class="nav-brand" href="{{ url_for('home') }}">🥗 知食分子</a>
+    <div class="nav-links">
+      <a href="{{ url_for('profile') }}">健康档案</a>
+      <a href="{{ url_for('market') }}">买菜推荐</a>
+      <a href="{{ url_for('index') }}">食谱推荐</a>
+      <a href="{{ url_for('daily') }}">一日饮食规划</a>
+      <a href="{{ url_for('week') }}" class="active">一周食谱</a>
+      <a href="{{ url_for('library') }}">知识库</a>
+      {% if current_user %}
+      <span class="nav-user">👤 {{ current_user }}</span>
+      <a href="{{ url_for('logout') }}">退出</a>
+      {% else %}
+      <a href="{{ url_for('login') }}">登录</a>
+      <a href="{{ url_for('register') }}">注册</a>
+      {% endif %}
+    </div>
+  </nav>
+
+  <header class="hero hero-compact">
+    <div class="hero-inner">
+      <span class="hero-badge">一键规划 · 7 天不重样</span>
+      <h1 class="hero-title">接下来一周，都替你安排好了</h1>
+      <p class="hero-sub">按健康目标与禁忌，智能生成未来 7 天的早中晚三餐，可随时刷新换一套</p>
+    </div>
+  </header>
+
+  <main class="container">
+    {% if not profile_loaded %}
+    <section class="panel warn-panel">
+      <h2 class="panel-title"><span class="panel-index">i</span>尚未建立健康档案</h2>
+      <p class="warn-list" style="margin:0">将按默认「均衡」目标生成一周计划。建议先完善健康档案以获得更贴合你的方案。</p>
+      <a class="link-btn" href="{{ url_for('profile') }}">去建立健康档案 →</a>
+    </section>
+    {% endif %}
+
+    <section class="panel">
+      <h2 class="panel-title"><span class="panel-index">01</span>本周计划概览</h2>
+      <p class="health-hint">🎯 健康目标：<strong>{{ goal }}</strong>{% if taboos %}｜🚫 禁忌：<strong>{{ taboos | join('、') }}</strong>{% endif %}</p>
+      {% if goal_desc %}<p class="health-comment">{{ goal_desc }}</p>{% endif %}
+      <form method="post" action="{{ url_for('week') }}" style="margin-top:14px">
+        <input type="hidden" name="goal" value="{{ goal }}">
+        <input type="hidden" name="taboos" value="{{ taboos | join(',') }}">
+        <button type="submit" name="action" value="refresh" class="btn-secondary" style="cursor:pointer">🔄 换一套一周计划</button>
+      </form>
+    </section>
+
+    <!-- 一周营养概览 -->
+    <section class="panel">
+      <h2 class="panel-title"><span class="panel-index">02</span>一周营养概览 <span class="unit">每日三餐合计热量（kcal）</span></h2>
+      <p class="health-hint">🍱 本周平均约 <strong>{{ avg_week }}</strong> kcal/天，尽量贴近你的目标摄入。</p>
+      <div class="week-overview">
+        {% for d in week %}
+        <div class="week-bar-item">
+          <span class="week-bar-cal">{{ d.day_total }}</span>
+          <div class="week-bar-wrap">
+            <div class="week-bar" style="height: {{ (d.day_total / week_max * 100) | round(1) }}%"></div>
+          </div>
+          <span class="week-bar-label">周{{ '一二三四五六日'[loop.index0] }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <!-- 7 天计划 -->
+    {% set daynames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'] %}
+    <section class="panel">
+      <h2 class="panel-title"><span class="panel-index">03</span>七天三餐安排</h2>
+      <div class="week-grid">
+        {% for d in week %}
+        <div class="week-card">
+          <div class="week-day">{{ daynames[loop.index0] }} <span class="week-day-num">第 {{ d.day }} 天</span></div>
+          {% for meal, picks in d.meals.items() %}
+          {% if picks %}
+          <div class="week-meal">
+            <span class="week-meal-tag">{{ meal }}</span>
+            {% for p in picks %}
+            <div class="week-recipe">
+              <span class="week-recipe-thumb">{{ method_emoji.get(p.recipe.method, '🍽️') }}</span>
+              <span class="week-recipe-name">{{ p.recipe.name }}</span>
+              <span class="badge badge-cal">{{ p.calories | int }} kcal</span>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% endfor %}
+          <div class="week-card-foot">
+            <span class="week-card-cal">🍚 约 {{ d.day_total }} kcal</span>
+            <a class="week-start-btn" href="{{ url_for('daily', recipes=d.recipe_names) }}">开始这一天 →</a>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="note" style="margin-top:16px">* 计划按热量从低到高分配早、午、晚，契合「{{ goal }}」目标；点击下方「一日饮食规划」可对单天做精细调整。</p>
+    </section>
+
+    <!-- 本周采购清单 -->
+    {% if shopping_list %}
+    <section class="panel">
+      <h2 class="panel-title"><span class="panel-index">04</span>本周采购清单 <span class="unit">按出现频次排序 · 已剔除常用调味料</span></h2>
+      <p class="health-hint">🛒 按出现频次汇总一周高频食材，照着买齐 7 天不重样。</p>
+      <div class="shopping-list">
+        {% for name, cnt in shopping_list %}
+        <span class="shopping-chip"><span class="shopping-chip-name">{{ name }}</span><span class="shopping-chip-cnt">×{{ cnt }}</span></span>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if llm_enabled %}
+    <div class="panel llm-panel">
+      <h2 class="panel-title"><span class="panel-index">AI</span>AI 一周饮食建议</h2>
+      <div class="chat-msg chat-ai" id="week-advice">正在为你生成一周饮食原则…</div>
+    </div>
+    {% endif %}
+
+    <p class="disclaimer">⚠️ 本计划仅为膳食参考，不构成医疗诊断或治疗建议。</p>
+  </main>
+
+  <script>
+    {% if llm_enabled %}
+    fetch('/week_advice', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({goal: {{ goal | tojson }}, taboos: {{ taboos | tojson }}})
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      var el = document.getElementById('week-advice');
+      if (!el) return;
+      if (d.advice) el.textContent = d.advice;
+      else if (d.error) el.textContent = '（' + d.error + '）';
+      else el.textContent = '暂无建议，可稍后重试。';
+    }).catch(function () {
+      var el = document.getElementById('week-advice');
+      if (el) el.textContent = '（网络错误，请刷新重试）';
+    });
+    {% endif %}
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js'); }
+  </script>
+</body>
+</html>

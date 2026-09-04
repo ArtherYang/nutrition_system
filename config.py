@@ -24,6 +24,9 @@ VISION_API_KEY = DEEPSEEK_API_KEY
 VISION_BASE_URL = DEEPSEEK_BASE_URL
 VISION_MODEL = "deepseek-v4-flash-vision-exp"
 
+# 会话签名密钥（生产环境请改用环境变量 SECRET_KEY）
+SECRET_KEY = os.environ.get("SECRET_KEY", "nutrition-demo-secret-key")
+
 # 数据库与数据文件路径（相对项目根目录，运行时解析为绝对路径）
 DB_PATH = os.path.join(_BASE_DIR, "database", "nutrition.db")
 INGREDIENTS_JSON = os.path.join(_BASE_DIR, "data", "ingredients.json")
@@ -31,6 +34,13 @@ RECIPES_JSON = os.path.join(_BASE_DIR, "data", "recipes.json")
 
 # 健康目标（前端展示用）
 GOALS = ["减脂", "增肌", "控糖", "均衡"]
+
+# 烹饪方式 → 封面 emoji（菜谱成品图占位；无真实图片时的视觉兜底）
+METHOD_EMOJI = {
+    "炒": "🍳", "煎": "🍳", "炸": "🍤",
+    "蒸": "🥟", "煮": "🍲", "炖": "🍲", "焖": "🍲", "烧": "🍖",
+    "烤": "🍢", "拌": "🥗", "饮": "🥤",
+}
 
 # 可选禁忌项（过敏原 + 慢病），映射到食材 taboo_tags
 TABOO_OPTIONS = {

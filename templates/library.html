@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>食材菜谱知识库 · 知食分子</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta name="theme-color" content="#5f7f63">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+  <!-- 顶部导航 -->
+  <nav class="nav">
+    <a class="nav-brand" href="{{ url_for('home') }}">🥗 知食分子</a>
+    <div class="nav-links">
+      <a href="{{ url_for('profile') }}">健康档案</a>
+      <a href="{{ url_for('market') }}">买菜推荐</a>
+      <a href="{{ url_for('index') }}">食谱推荐</a>
+      <a href="{{ url_for('daily') }}">一日饮食规划</a>
+      <a href="{{ url_for('week') }}">一周食谱</a>
+      <a href="{{ url_for('library') }}" class="active">知识库</a>
+      {% if current_user %}
+      <span class="nav-user">👤 {{ current_user }}</span>
+      <a href="{{ url_for('logout') }}">退出</a>
+      {% else %}
+      <a href="{{ url_for('login') }}">登录</a>
+      <a href="{{ url_for('register') }}">注册</a>
+      {% endif %}
+    </div>
+  </nav>
+
+  <header class="hero hero-compact">
+    <div class="hero-inner">
+      <span class="hero-badge">📚 食材营养库 · 菜谱库</span>
+      <h1 class="hero-title">营养知识库，一站式检索</h1>
+      <p class="hero-sub">集中浏览 {{ ingredients | length }} 种食材、{{ recipes | length }} 道菜谱，支持多关键词、类别、口味、GI、标签筛选</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- 检索区 -->
+    <section class="panel kb-panel">
+      <div class="kb-search-row">
+        <input type="text" id="kb-q" class="kb-search" placeholder="搜索食材 / 菜谱 / 类别 / 口味 / 标签…（空格分隔多个关键词）" autocomplete="off">
+      </div>
+
+      <div class="kb-tabs" id="kb-tabs">
+        <button class="kb-tab active" data-tab="all">全部 <span class="kb-count" id="count-all"></span></button>
+        <button class="kb-tab" data-tab="ingredient">食材 <span class="kb-count" id="count-ingredient"></span></button>
+        <button class="kb-tab" data-tab="recipe">菜谱 <span class="kb-count" id="count-recipe"></span></button>
+      </div>
+
+      <div class="kb-filter-row" id="kb-cat-row">
+        <span class="kb-filter-label">食材类别：</span>
+        <div class="kb-chips" id="kb-cat-chips"></div>
+      </div>
+      <div class="kb-filter-row" id="kb-gi-row">
+        <span class="kb-filter-label">GI 水平：</span>
+        <div class="kb-chips" id="kb-gi-chips"></div>
+      </div>
+      <div class="kb-filter-row" id="kb-method-row">
+        <span class="kb-filter-label">烹饪方式：</span>
+        <div class="kb-chips" id="kb-method-chips"></div>
+      </div>
+      <div class="kb-filter-row" id="kb-sort-row">
+        <span class="kb-filter-label">排序：</span>
+        <select id="kb-sort" class="select kb-sort">
+          <option value="default">默认排序</option>
+          <option value="cal-asc">热量从低到高</option>
+          <option value="cal-desc">热量从高到低</option>
+          <option value="protein-desc">蛋白质从高到低</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- 食材热量计算器 -->
+    <section class="panel kb-panel">
+      <h2 class="panel-title"><span class="panel-index">🧮</span>食材热量计算器 <span class="unit">选食材 · 填克数 · 秒算营养</span></h2>
+      <div class="calc-row">
+        <input list="ing-list" id="calc-name" class="kb-search" placeholder="输入或选择食材，如「鸡蛋」" autocomplete="off" style="flex:2">
+        <datalist id="ing-list"></datalist>
+        <input type="number" id="calc-grams" class="kb-search" placeholder="克数 g" min="1" style="flex:1">
+        <button type="button" class="btn-primary" id="calc-add" style="margin-top:0;flex:0 0 auto">＋ 添加</button>
+      </div>
+      <ul class="calc-list" id="calc-list"></ul>
+      <div class="calc-total" id="calc-total"></div>
+      <p class="note">营养按每 100g 数据 × 克数换算，用于快速估算一餐的热量与三大营养素。</p>
+    </section>
+
+    <!-- 结果区 -->
+    <section id="kb-results"></section>
+    <p class="disclaimer">⚠️ 营养数据为每 100g 可食部估算，仅供膳食参考。</p>
+  </main>
+
+  <script>
+    const INGREDIENTS = {{ ingredients | tojson }};
+    const RECIPES = {{ recipes | tojson }};
+    const CATEGORIES = {{ categories | tojson }};
+    const METHODS = {{ methods | tojson }};
+    const METHOD_EMOJI = {{ method_emoji | tojson }};
+    const GI_LEVELS = [
+      { key: '', label: '全部' },
+      { key: 'low', label: '低 GI（<55）' },
+      { key: 'mid', label: '中 GI（55~70）' },
+      { key: 'high', label: '高 GI（≥70）' }
+    ];
+
+    const state = { q: '', tab: 'all', category: '', method: '', gi: '', sort: 'default' };
+
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function keywords() {
+      return state.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    }
+    function highlight(text, kws) {
+      let out = esc(text);
+      kws.forEach(k => {
+        if (!k) return;
+        const re = new RegExp('(' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+        out = out.replace(re, '<mark>$1</mark>');
+      });
+      return out;
+    }
+    function fmt(n, digits) {
+      if (n === null || n === undefined || n === '') return '—';
+      return Number(n).toFixed(digits === undefined ? 0 : digits);
+    }
+
+    // ---------- 构建筛选 chips ----------
+    function buildChips(container, list, key) {
+      container.innerHTML = '';
+      const all = document.createElement('button');
+      all.className = 'kb-chip' + (state[key] === '' ? ' active' : '');
+      all.textContent = '全部';
+      all.onclick = () => { state[key] = ''; renderChips(); render(); };
+      container.appendChild(all);
+      list.forEach(v => {
+        const b = document.createElement('button');
+        b.className = 'kb-chip' + (state[key] === v.key ? ' active' : '');
+        b.textContent = v.label;
+        b.onclick = () => { state[key] = state[key] === v.key ? '' : v.key; renderChips(); render(); };
+        container.appendChild(b);
+      });
+    }
+    function renderChips() {
+      buildChips(document.getElementById('kb-cat-chips'), CATEGORIES.map(v => ({ key: v, label: v })), 'category');
+      buildChips(document.getElementById('kb-method-chips'), METHODS.map(v => ({ key: v, label: v })), 'method');
+      buildChips(document.getElementById('kb-gi-chips'), GI_LEVELS, 'gi');
+    }
+
+    // ---------- 匹配（多关键词 AND） ----------
+    function matchAll(hay, kws) {
+      return kws.every(k => hay.includes(k));
+    }
+    function giMatch(d) {
+      if (!state.gi) return true;
+      if (d.gi === null || d.gi === undefined) return false;
+      if (state.gi === 'low') return d.gi < 55;
+      if (state.gi === 'mid') return d.gi >= 55 && d.gi < 70;
+      return d.gi >= 70;
+    }
+    function matchesIngredient(d, kws) {
+      if (state.category && (d.category || '其他') !== state.category) return false;
+      if (!giMatch(d)) return false;
+      if (!kws.length) return true;
+      const hay = [d.name, d.category, ...(d.aliases || []), ...(d.taboo_tags || [])].join(' ').toLowerCase();
+      return matchAll(hay, kws);
+    }
+    function matchesRecipe(r, kws) {
+      if (state.method && (r.method || '其他') !== state.method) return false;
+      if (!kws.length) return true;
+      const hay = [r.name, r.method, r.region, r.flavor, ...(r.tags || []), ...(r.ingredients || [])].join(' ').toLowerCase();
+      return matchAll(hay, kws);
+    }
+
+    // ---------- 排序 ----------
+    function sortIngredients(list) {
+      const s = state.sort;
+      if (s === 'cal-asc') list.sort((a, b) => (a.calories || 0) - (b.calories || 0));
+      else if (s === 'cal-desc') list.sort((a, b) => (b.calories || 0) - (a.calories || 0));
+      else if (s === 'protein-desc') list.sort((a, b) => (b.protein || 0) - (a.protein || 0));
+      return list;
+    }
+    function sortRecipes(list) {
+      const s = state.sort;
+      if (s === 'cal-asc') list.sort((a, b) => (a.estimated_calories || 0) - (b.estimated_calories || 0));
+      else if (s === 'cal-desc') list.sort((a, b) => (b.estimated_calories || 0) - (a.estimated_calories || 0));
+      return list;
+    }
+
+    // ---------- 渲染 ----------
+    function ingRow(d, kws) {
+      const taboo = (d.taboo_tags && d.taboo_tags.length)
+        ? '<div class="kb-tag-row">' + d.taboo_tags.map(t => '<span class="kb-tag kb-tag-warn">' + highlight(t, kws) + '</span>').join('') + '</div>' : '';
+      return '<tr>'
+        + '<td class="cell-name">' + highlight(d.name, kws)
+        +   '<div class="kb-aliases">' + (d.aliases && d.aliases.length ? '别名：' + highlight(d.aliases.join('、'), kws) : '') + '</div>' + taboo + '</td>'
+        + '<td class="cell-cat">' + highlight(d.category || '其他', kws) + '</td>'
+        + '<td class="cell-kcal">' + fmt(d.calories) + '</td>'
+        + '<td>' + fmt(d.protein, 1) + '</td>'
+        + '<td>' + fmt(d.fat, 1) + '</td>'
+        + '<td>' + fmt(d.carb, 1) + '</td>'
+        + '<td>' + fmt(d.fiber, 1) + '</td>'
+        + '<td>' + (d.gi === null || d.gi === undefined ? '—' : fmt(d.gi)) + '</td>'
+        + '</tr>';
+    }
+
+    function renderIngredients(list) {
+      if (!list.length) return '<p class="empty">没有匹配的食材。</p>';
+      let rows = sortIngredients(list).map(d => ingRow(d, keywords())).join('');
+      return '<div class="panel"><h2 class="panel-title"><span class="panel-index">🥦</span>食材营养库 <span class="unit">每 100g</span></h2>'
+        + '<div class="table-wrap"><table class="nutrition-table"><thead><tr>'
+        + '<th>食材</th><th>类别</th><th>热量<br><span class="th-unit">kcal</span></th>'
+        + '<th>蛋白质<br><span class="th-unit">g</span></th><th>脂肪<br><span class="th-unit">g</span></th>'
+        + '<th>碳水<br><span class="th-unit">g</span></th><th>纤维<br><span class="th-unit">g</span></th><th>GI</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+    }
+
+    function recipeCard(r, kws) {
+      const tags = (r.tags || []).map(t => '<span class="kb-tag">' + highlight(t, kws) + '</span>').join('');
+      const emoji = METHOD_EMOJI[r.method] || '🍽️';
+      return '<div class="kb-recipe">'
+        + '<div class="recipe-thumb">' + emoji + '<span class="recipe-thumb-method">' + esc(r.method || '') + '</span></div>'
+        + '<div class="kb-recipe-head">'
+        +   '<h3 class="kb-recipe-name">' + highlight(r.name, kws) + '</h3>'
+        +   '<div class="kb-recipe-meta">'
+        +     '<span class="badge badge-method">' + highlight(r.method || '', kws) + '</span>'
+        +     (r.region ? '<span class="badge badge-region">' + highlight(r.region, kws) + '</span>' : '')
+        +     (r.flavor ? '<span class="badge badge-flavor">口味 ' + highlight(r.flavor, kws) + '</span>' : '')
+        +     '<span class="badge badge-cal">约 ' + fmt(r.estimated_calories) + ' kcal</span>'
+        +   '</div>'
+        + '</div>'
+        + '<div class="kb-tag-row">' + tags + '</div>'
+        + (r.ingredients && r.ingredients.length ? '<p class="kb-recipe-ing">食材：' + highlight(r.ingredients.join('、'), kws) + '</p>' : '')
+        + (r.steps && r.steps.length ? '<details class="kb-steps"><summary>查看做法（' + r.steps.length + ' 步）</summary><ol class="steps">' + r.steps.map(s => '<li>' + esc(s) + '</li>').join('') + '</ol></details>' : '')
+        + '</div>';
+    }
+
+    function renderRecipes(list) {
+      if (!list.length) return '<p class="empty">没有匹配的菜谱。</p>';
+      const cards = sortRecipes(list).map(r => recipeCard(r, keywords())).join('');
+      return '<div class="panel"><h2 class="panel-title"><span class="panel-index">🍳</span>菜谱库 <span class="unit">' + list.length + ' 道</span></h2>'
+        + '<div class="kb-recipe-grid">' + cards + '</div></div>';
+    }
+
+    function render() {
+      const kws = keywords();
+      const showIng = state.tab === 'all' || state.tab === 'ingredient';
+      const showRec = state.tab === 'all' || state.tab === 'recipe';
+
+      const ing = showIng ? INGREDIENTS.filter(d => matchesIngredient(d, kws)) : [];
+      const rec = showRec ? RECIPES.filter(r => matchesRecipe(r, kws)) : [];
+
+      document.getElementById('kb-cat-row').style.display = showIng ? '' : 'none';
+      document.getElementById('kb-gi-row').style.display = showIng ? '' : 'none';
+      document.getElementById('kb-method-row').style.display = showRec ? '' : 'none';
+
+      let html = '';
+      if (showIng && showRec) {
+        html = '<p class="kb-summary">共找到 <strong>' + ing.length + '</strong> 种食材、<strong>' + rec.length + '</strong> 道菜谱</p>';
+      }
+      if (showIng) html += renderIngredients(ing);
+      if (showRec) html += renderRecipes(rec);
+      document.getElementById('kb-results').innerHTML = html;
+
+      document.getElementById('count-all').textContent = INGREDIENTS.length + RECIPES.length;
+      document.getElementById('count-ingredient').textContent = INGREDIENTS.length;
+      document.getElementById('count-recipe').textContent = RECIPES.length;
+    }
+
+    // ---------- 事件绑定 ----------
+    document.getElementById('kb-q').addEventListener('input', e => { state.q = e.target.value; render(); });
+    document.getElementById('kb-sort').addEventListener('change', e => { state.sort = e.target.value; render(); });
+    document.querySelectorAll('#kb-tabs .kb-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#kb-tabs .kb-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.tab = btn.dataset.tab;
+        render();
+      });
+    });
+
+    renderChips();
+    render();
+
+    // ---------- 食材热量计算器 ----------
+    var calcItems = [];
+    var ingNameMap = {};
+    INGREDIENTS.forEach(function (d) { ingNameMap[d.name] = d; });
+    var ingList = document.getElementById('ing-list');
+    INGREDIENTS.forEach(function (d) {
+      var o = document.createElement('option');
+      o.value = d.name;
+      ingList.appendChild(o);
+    });
+    function renderCalc() {
+      var list = document.getElementById('calc-list');
+      var total = { cal: 0, protein: 0, fat: 0, carb: 0 };
+      list.innerHTML = '';
+      calcItems.forEach(function (it, idx) {
+        total.cal += it.cal; total.protein += it.protein; total.fat += it.fat; total.carb += it.carb;
+        var li = document.createElement('li');
+        li.className = 'calc-item';
+        li.innerHTML = '<span class="calc-name">' + esc(it.name) + '</span>'
+          + '<span class="calc-grams">' + it.grams + ' g</span>'
+          + '<span class="calc-kcal">' + Math.round(it.cal) + ' kcal</span>'
+          + '<button type="button" class="calc-del" onclick="removeCalc(' + idx + ')">✕</button>';
+        list.appendChild(li);
+      });
+      var t = document.getElementById('calc-total');
+      if (calcItems.length) {
+        t.innerHTML = '<div class="calc-total-item">🔥 总热量 <strong>' + Math.round(total.cal) + '</strong> kcal</div>'
+          + '<div class="calc-total-item">💪 蛋白质 <strong>' + total.protein.toFixed(1) + '</strong> g</div>'
+          + '<div class="calc-total-item">🥑 脂肪 <strong>' + total.fat.toFixed(1) + '</strong> g</div>'
+          + '<div class="calc-total-item">🍚 碳水 <strong>' + total.carb.toFixed(1) + '</strong> g</div>';
+      } else {
+        t.innerHTML = '';
+      }
+    }
+    function addCalc() {
+      var name = document.getElementById('calc-name').value.trim();
+      var grams = parseFloat(document.getElementById('calc-grams').value);
+      var d = ingNameMap[name];
+      if (!d) { alert('请从下拉提示中选择有效的食材名称'); return; }
+      if (!grams || grams <= 0) { alert('请输入大于 0 的克数'); return; }
+      var k = grams / 100;
+      calcItems.push({
+        name: d.name, grams: grams,
+        cal: (d.calories || 0) * k,
+        protein: (d.protein || 0) * k,
+        fat: (d.fat || 0) * k,
+        carb: (d.carb || 0) * k,
+      });
+      document.getElementById('calc-name').value = '';
+      document.getElementById('calc-grams').value = '';
+      document.getElementById('calc-name').focus();
+      renderCalc();
+    }
+    function removeCalc(i) { calcItems.splice(i, 1); renderCalc(); }
+    document.getElementById('calc-add').addEventListener('click', addCalc);
+    document.getElementById('calc-name').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); document.getElementById('calc-grams').focus(); }
+    });
+    document.getElementById('calc-grams').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); addCalc(); }
+    });
+    renderCalc();
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js'); }
+  </script>
+</body>
+</html>

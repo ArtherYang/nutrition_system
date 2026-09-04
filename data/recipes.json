@@ -16599,6 +16599,7 @@
   {
     "name": "哈拉面包",
     "ingredients": [
+      "面粉",
       "白砂糖",
       "鸡蛋",
       "食用油"
@@ -16616,7 +16617,7 @@
     "flavor": "清淡",
     "region": "波兰式",
     "estimated_calories": 285,
-    "method": "拌"
+    "method": "烤"
   },
   {
     "name": "切尔西卷",
@@ -18371,6 +18372,7 @@
   {
     "name": "恩赛马达",
     "ingredients": [
+      "面粉",
       "白砂糖",
       "鸡蛋",
       "食用油"
@@ -21722,7 +21724,7 @@
     "flavor": "其他",
     "region": "意式",
     "estimated_calories": 752,
-    "method": "煮"
+    "method": "烤"
   },
   {
     "name": "波兰巧克力核桃蛋糕",

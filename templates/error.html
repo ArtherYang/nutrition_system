@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ code }} · 知食分子</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta name="theme-color" content="#5f7f63">
+</head>
+<body>
+  <main class="container" style="max-width: 480px; text-align: center; padding-top: 80px">
+    <div class="panel">
+      <div style="font-size: 56px">😕</div>
+      <h1 class="hero-title" style="font-size: 40px">{{ code }}</h1>
+      <p class="hero-sub" style="margin: 12px auto 24px">{{ msg }}</p>
+      <a class="home-btn home-btn-primary" href="{{ url_for('home') }}">返回首页</a>
+    </div>
+  </main>
+</body>
+</html>
