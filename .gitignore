@@ -25,3 +25,14 @@ yolov8n.pt
 Thumbs.db
 .vscode/
 .idea/
+
+# ---- 文档 / PPT（含个人信息，不入库）----
+PROJECT_CHARTER.md
+项目介绍.md
+演示脚本.md
+docs/
+ppt_preview/
+scripts/generate_ppt.py
+scripts/gen_ppt_content.py
+scripts/export_preview.py
+scripts/ppt_content.json
